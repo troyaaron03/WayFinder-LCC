@@ -23,7 +23,10 @@
         <button type="button" data-tab="rooms"><span aria-hidden="true">⌖</span> Rooms &amp; locations</button>
         <button type="button" data-tab="qrCodes"><span aria-hidden="true">▧</span> QR guides</button>
         <span class="sidebar-label sidebar-group-label">COMMUNITY</span>
+        <button type="button" data-tab="transactions"><span aria-hidden="true">✓</span> Destination visits</button>
         <button type="button" data-tab="feedback"><span aria-hidden="true">✳</span> Student feedback</button>
+        <span class="sidebar-label sidebar-group-label">ACCESS</span>
+        <button type="button" data-tab="users"><span aria-hidden="true">♙</span> User accounts</button>
       </nav>
       <div class="sidebar-note"><span class="sidebar-note-icon" aria-hidden="true">✦</span><strong>Keep campus clear.</strong><p>Accurate room details help everyone find their way.</p></div>
     </aside>
@@ -58,6 +61,16 @@
       <section id="feedback">
         <div class="head"><div><span class="eyebrow">STUDENT VOICE</span><h1>Student feedback</h1><p>Review ratings and suggestions shared by students.</p></div><button id="refreshFeedback" class="secondary-button" type="button">Refresh feedback</button></div>
         <div id="feedbackList" class="cards"><p class="empty-state">Student feedback will appear here.</p></div>
+      </section>
+      <section id="transactions">
+        <div class="head"><div><span class="eyebrow">CAMPUS ACTIVITY</span><h1>Destination transactions</h1><p>Review map directions opened and arrivals confirmed by students.</p></div><button id="refreshTransactions" class="secondary-button" type="button">Refresh transactions</button></div>
+        <div id="transactionList" class="cards"><p class="empty-state">Destination visits will appear here.</p></div>
+      </section>
+      <section id="users">
+        <div class="head"><div><span class="eyebrow">ACCESS CONTROL</span><h1>User accounts</h1><p>Manage registered accounts. Only superadmins can assign admin or superadmin access.</p></div><button id="refreshUsers" class="secondary-button" type="button">Refresh accounts</button></div>
+        <p id="userListNotice" class="user-list-notice" role="status" hidden></p>
+        <div id="userList" class="cards"><p class="empty-state">Registered accounts will appear here.</p></div>
+        <button id="loadMoreUsers" class="secondary-button load-more-users" type="button" hidden>Load more accounts</button>
       </section>
     </main>
   </div>

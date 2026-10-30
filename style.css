@@ -31,6 +31,7 @@ button{cursor:pointer}
 .primary-button:disabled{cursor:wait;opacity:.7}
 .form-switch{margin:20px 0 0;color:#738077;text-align:center;font-size:13px}
 .form-switch button{padding:0;border:0;background:none;color:#1e5a9f;font-weight:750}
+.form-hint{margin:12px 0 0;color:#7b867e;font-size:12px;line-height:1.55}
 #msg{min-height:22px;margin:14px 0 0;color:#b33b32;font-size:13px;line-height:1.5}
 #msg[data-state="success"]{color:#287347}
 .privacy-note{margin-top:22px;padding-top:18px;border-top:1px solid #e8ebe5;font-size:12px;line-height:1.6}

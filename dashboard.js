@@ -1,7 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
-import { getFirestore, collection, addDoc, getDocs, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, getDocs, serverTimestamp, doc, getDoc } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+import { getFunctions } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-functions.js";
 import { defaultRoomCoordinates } from "./campus-locations.js";
+import { linkStudentNumber } from "./student-account.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCDuxFyTm3pYIsrO5i5ivTKZyM4SZYnpqM",
@@ -16,15 +18,16 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const functions = getFunctions(app);
 const $ = (id) => document.getElementById(id);
 let currentUser = null;
+let currentStudentNumber = "";
+let currentRole = "";
 let campusRooms = [];
 let currentPosition = null;
-let campusMap = null;
-let campusMapBuildings = [];
-let selectedMapBuilding = null;
 let selectedMapRoomId = "";
-let mapResizeObserver = null;
+let pendingArrivalRoomId = "";
+const arrivalRecordedRoomIds = new Set();
 let cameraStream = null;
 let cameraHeading = null;
 let cameraOrientationEnabled = false;
@@ -99,12 +102,26 @@ function openSection(sectionId) {
   document.querySelectorAll(".dashboard-section").forEach((section) => {
     section.classList.toggle("active", section.id === sectionId);
   });
-  if (sectionId === "map") resizeCampusMap();
-  else stopCameraView("Camera stopped because you left the map.");
+  if (sectionId !== "map") stopCameraView("Camera stopped because you left the map.");
 }
 
 document.querySelectorAll(".section-tab").forEach((button) => {
   button.addEventListener("click", () => openSection(button.dataset.target));
+});
+
+document.addEventListener("click", (event) => {
+  const link = event.target instanceof Element ? event.target.closest("[data-map-directions]") : null;
+  if (!link) return;
+  const room = campusRooms.find((item) => item.id === link.dataset.roomId);
+  if (room) {
+    recordMapUse(room).catch((error) => {
+      console.error("Could not record map directions use:", error);
+      $("feedbackMessage").textContent = "Directions opened, but this map use could not be recorded.";
+    });
+  }
+  $("feedbackPrompt").hidden = false;
+  openSection("evaluation");
+  $("rating").focus();
 });
 
 onAuthStateChanged(auth, async (user) => {
@@ -113,8 +130,74 @@ onAuthStateChanged(auth, async (user) => {
     return;
   }
   currentUser = user;
-  $("userEmail").textContent = user.email || "";
-  await loadCampusData();
+  try {
+    const profile = await getDoc(doc(db, "users", user.uid));
+    currentRole = profile.exists() ? profile.data().role : "student";
+    if (!["student", "visitor"].includes(currentRole)) {
+      throw new Error("Student profile not found or invalid.");
+    }
+    currentStudentNumber = String(profile.data()?.studentNumber || "") ||
+      localStorage.getItem(`pendingStudentNumber:${user.uid}`) || "";
+    if (!profile.exists()) {
+      showStudentSetup("This account needs its student number linked before arrival tracking is available.");
+    } else if (currentRole === "student" && !currentStudentNumber) {
+      showStudentSetup("Add your student number to enable arrival tracking.");
+    } else if (currentRole === "visitor") {
+      $("accountNoticeText").textContent = "Visitor access is read-only. Destination arrival tracking is available to student accounts.";
+      $("accountNotice").hidden = false;
+    }
+    $("userEmail").textContent = `${currentStudentNumber ? `${currentStudentNumber} · ` : ""}${user.email || ""}`;
+    const accountNotice = sessionStorage.getItem("studentNumberLinkNotice");
+    if (accountNotice && currentRole === "student") {
+      showStudentSetup(accountNotice);
+      $("accountNotice").hidden = false;
+      sessionStorage.removeItem("studentNumberLinkNotice");
+    }
+    await loadCampusData();
+  } catch (error) {
+    console.error("Could not load student profile:", error);
+    $("locationMessage").textContent = "Could not verify your student account. Please sign in again or contact the administrator.";
+    await signOut(auth);
+    location.href = "index.html";
+  }
+});
+
+function showStudentSetup(message) {
+  $("accountNoticeText").textContent = message;
+  $("accountStudentNumber").value =
+    localStorage.getItem(`pendingStudentNumber:${currentUser.uid}`) || "";
+  $("accountSetupForm").hidden = false;
+  $("accountNotice").hidden = false;
+}
+
+$("accountSetupForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const number = $("accountStudentNumber").value.trim();
+  const status = $("accountSetupMessage");
+  if (!/^\d{8}$/.test(number)) {
+    status.textContent = "Enter your 8-digit student number.";
+    return;
+  }
+  const button = $("accountSetupForm").querySelector("button");
+  button.disabled = true;
+  status.textContent = "Linking your student number…";
+  try {
+    await linkStudentNumber(db, functions, currentUser, number);
+    currentStudentNumber = number;
+    $("userEmail").textContent = `${number} · ${currentUser.email || ""}`;
+    localStorage.removeItem(`pendingStudentNumber:${currentUser.uid}`);
+    sessionStorage.removeItem("studentNumberLinkNotice");
+    $("accountNotice").hidden = true;
+  } catch (error) {
+    console.error("Could not link student number:", error);
+    status.textContent = error.code === "functions/already-exists"
+      ? "That number is linked to another account. Contact the administrator to resolve it."
+      : error.code === "permission-denied"
+        ? "The account setup rules are not published yet. Please ask the administrator to update Firebase rules."
+        : "Could not link that number. Check it and try again, or contact the administrator.";
+  } finally {
+    button.disabled = false;
+  }
 });
 
 $("logout").addEventListener("click", async () => {
@@ -131,6 +214,7 @@ $("cameraToggle").addEventListener("click", () => {
   if (cameraStream) stopCameraView();
   else startCameraView();
 });
+$("confirmArrival").addEventListener("click", confirmCameraArrival);
 document.addEventListener("visibilitychange", () => {
   if (document.hidden && cameraStream) stopCameraView("Camera stopped while the page is in the background.");
 });
@@ -152,11 +236,12 @@ async function loadCampusData() {
   if (roomsResult.status === "fulfilled") {
     campusRooms = roomsResult.value.docs.map((item) => ({ id: item.id, ...item.data() }));
     renderRooms();
-    await renderCampusMap();
+    renderCampusMap();
   } else {
     renderLoadError("roomList", "Could not load rooms", roomsResult.reason);
-    renderLoadError("mapList", "Could not load campus map", roomsResult.reason);
-    $("campusMap").innerHTML = '<p class="campus-map-message error-state" role="status">Campus locations could not be loaded. Please try again later.</p>';
+    renderLoadError("mapList", "Could not load mapped rooms", roomsResult.reason);
+    $("mapDestination").innerHTML = '<option value="">Campus locations could not be loaded</option>';
+    $("mapPlaceDetails").innerHTML = '<p class="error-state" role="status">Campus locations could not be loaded. Please try again later.</p>';
   }
   if (qrResult.status === "fulfilled") {
     renderQrGuides(qrResult.value);
@@ -165,444 +250,62 @@ async function loadCampusData() {
   }
 }
 
-function buildingName(room) {
-  return String(room.building || room.name || roomTitle(room)).trim();
-}
-
-function buildCampusPlaces(rooms) {
-  const grouped = new Map();
-  rooms.forEach((room) => {
-    const name = buildingName(room);
-    const key = name.toLocaleLowerCase();
-    if (!grouped.has(key)) grouped.set(key, { name, rooms: [], coordinates: [] });
-    const building = grouped.get(key);
-    building.rooms.push(room);
-    const coordinates = roomCoordinates(room);
-    if (coordinates) building.coordinates.push(coordinates);
-  });
-
-  return [...grouped.values()].map((building) => ({
-    ...building,
-    coordinates: building.coordinates.length
-      ? {
-          lat: building.coordinates.reduce((sum, point) => sum + point.lat, 0) / building.coordinates.length,
-          lng: building.coordinates.reduce((sum, point) => sum + point.lng, 0) / building.coordinates.length
-        }
-      : null
-  })).sort((a, b) => a.name.localeCompare(b.name));
-}
-
-function addCampusLabel(THREE, building, height) {
-  const canvas = document.createElement("canvas");
-  canvas.width = 512;
-  canvas.height = 128;
-  const context = canvas.getContext("2d");
-  context.fillStyle = "rgba(16, 47, 86, 0.88)";
-  context.fillRect(6, 6, 500, 116);
-  context.font = "700 36px system-ui, sans-serif";
-  context.textAlign = "center";
-  context.textBaseline = "middle";
-  context.fillStyle = "#ffffff";
-  const label = building.name.length > 23 ? `${building.name.slice(0, 21)}…` : building.name;
-  context.fillText(label, 256, 65, 460);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  const labelSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true }));
-  labelSprite.scale.set(12, 3, 1);
-  labelSprite.position.set(0, height + 3, 0);
-  building.group.add(labelSprite);
-}
-
-function projectCampusCoordinates(coordinates) {
-  if (!campusMap?.coordinateOrigin || !coordinates) return null;
-  const radians = Math.PI / 180;
-  return {
-    x: (coordinates.lng - campusMap.coordinateOrigin.lng) * 111320 *
-      Math.cos(campusMap.coordinateOrigin.lat * radians) * campusMap.coordinateScale,
-    z: -(coordinates.lat - campusMap.coordinateOrigin.lat) * 110540 * campusMap.coordinateScale
-  };
-}
-
-function addCampusBuilding(THREE, building, index, position) {
-  const roomCount = building.rooms.length;
-  const floors = new Set(building.rooms.map((room) => String(room.floor || "").trim()).filter(Boolean)).size;
-  const height = Math.min(19, 6 + Math.max(floors, Math.ceil(roomCount / 5)) * 2.2);
-  const width = 8.5 + Math.min(3, Math.floor(roomCount / 8));
-  const depth = 7 + Math.min(2, Math.floor(roomCount / 10));
-  const group = new THREE.Group();
-  group.position.set(position.x, 0, position.z);
-
-  const palette = [0x9eb7c5, 0xb9a98e, 0xa2b9a2, 0xb7a3a0, 0xa5adbf];
-  const material = new THREE.MeshStandardMaterial({
-    color: palette[index % palette.length],
-    roughness: 0.82,
-    emissive: 0x000000
-  });
-  const body = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), material);
-  body.position.y = height / 2 + 0.35;
-  body.castShadow = true;
-  body.receiveShadow = true;
-  body.userData.building = building;
-  group.add(body);
-
-  const roof = new THREE.Mesh(
-    new THREE.BoxGeometry(width + 0.8, 0.7, depth + 0.8),
-    new THREE.MeshStandardMaterial({ color: 0x536e78, roughness: 0.8 })
-  );
-  roof.position.y = height + 0.7;
-  roof.castShadow = true;
-  group.add(roof);
-
-  const windowMaterial = new THREE.MeshStandardMaterial({ color: 0xe7f1e8, roughness: 0.38 });
-  const rows = Math.max(1, Math.min(5, Math.floor(height / 3)));
-  for (let row = 0; row < rows; row += 1) {
-    for (let column = -1; column <= 1; column += 1) {
-      const windowMesh = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.9, 0.12), windowMaterial);
-      windowMesh.position.set(column * 2.2, 2.1 + row * 2.5, depth / 2 + 0.08);
-      group.add(windowMesh);
-    }
-  }
-
-  const foundation = new THREE.Mesh(
-    new THREE.BoxGeometry(width + 2.2, 0.7, depth + 2.2),
-    new THREE.MeshStandardMaterial({ color: 0xd4dfc9, roughness: 1 })
-  );
-  foundation.position.y = 0.25;
-  foundation.receiveShadow = true;
-  group.add(foundation);
-  building.group = group;
-  building.mesh = body;
-  building.position = position;
-  building.floorCount = floors;
-  addCampusLabel(THREE, building, height);
-  campusMap.scene.add(group);
-}
-
-function setCampusMapCamera() {
-  if (!campusMap) return;
-  const { camera, target, theta, phi, distance } = campusMap;
-  camera.position.set(
-    target.x + distance * Math.sin(phi) * Math.sin(theta),
-    target.y + distance * Math.cos(phi),
-    target.z + distance * Math.sin(phi) * Math.cos(theta)
-  );
-  camera.lookAt(target);
+function selectedMapRoom() {
+  return campusRooms.find((room) => room.id === selectedMapRoomId) || null;
 }
 
 function updateMapPlaceDetails() {
   const details = $("mapPlaceDetails");
-  const building = campusMapBuildings.find((item) => item.name === selectedMapBuilding);
-  if (!building) {
-    details.innerHTML = '<span class="card-kicker">CAMPUS DIRECTORY</span><h3>Select a building</h3><p>Choose a room from the list or select a building in the 3D view to see its details.</p>';
+  const room = selectedMapRoom();
+  if (!room) {
+    details.innerHTML = '<span class="card-kicker">CAMPUS DIRECTORY</span><h3>Choose a destination</h3><p>Select a room above to view its details and available directions.</p>';
     return;
   }
 
-  const room = building.rooms.find((item) => item.id === selectedMapRoomId) || building.rooms[0];
-  const coordinates = roomCoordinates(room) || building.coordinates;
+  const coordinates = roomCoordinates(room);
   const direction = coordinates ? directionsUrl(coordinates, currentPosition) : safeHttpUrl(room.mapLink);
-  const roomNames = building.rooms.slice(0, 8).map((item) =>
-    `<li>${esc(roomTitle(item))}${item.floor ? ` · ${esc(item.floor)}` : ""}</li>`
-  ).join("");
-  const moreRooms = building.rooms.length > 8
-    ? `<li>And ${building.rooms.length - 8} more location${building.rooms.length - 8 === 1 ? "" : "s"}</li>`
-    : "";
-  details.innerHTML = `<span class="card-kicker">CAMPUS BUILDING</span>
-    <h3>${esc(building.name)}</h3>
-    <p>${building.rooms.length} listed location${building.rooms.length === 1 ? "" : "s"}${building.floorCount ? ` · ${building.floorCount} floor${building.floorCount === 1 ? "" : "s"} recorded` : ""}</p>
-    ${room.description ? `<p>${esc(room.description)}</p>` : ""}
-    ${direction ? `<a class="text-link" href="${esc(direction)}" target="_blank" rel="noopener noreferrer">Get directions <span aria-hidden="true">↗</span></a>` : '<p class="muted-note">Directions are not available for this location yet.</p>'}
-    <ul class="map-room-list">${roomNames}${moreRooms}</ul>`;
+  details.innerHTML = `<span class="card-kicker">${esc(room.building || "CAMPUS")}</span>
+    <h3>${esc(roomTitle(room))}</h3>
+    <p>${esc(room.description || room.roomType || "Campus room")}${room.floor ? ` · ${esc(room.floor)}` : ""}</p>
+    ${direction ? `<a class="text-link" data-map-directions data-room-id="${esc(room.id)}" href="${esc(direction)}" target="_blank" rel="noopener noreferrer">Get directions <span aria-hidden="true">↗</span></a>` : '<p class="muted-note">Directions are not available for this location yet.</p>'}`;
 }
 
-function selectCampusBuilding(name, roomId = "") {
-  selectedMapBuilding = name;
-  const building = campusMapBuildings.find((item) => item.name === name);
-  selectedMapRoomId = roomId || building?.rooms[0]?.id || "";
-  campusMapBuildings.forEach((item) => {
-    if (item.mesh) item.mesh.material.emissive.setHex(item.name === name ? 0x264f37 : 0x000000);
+async function recordMapUse(room) {
+  if (currentRole !== "student" || !currentStudentNumber) return;
+  await addDoc(collection(db, "transactions"), {
+    userId: currentUser.uid,
+    studentNumber: currentStudentNumber,
+    roomId: room.id,
+    roomNumber: String(room.roomNumber || ""),
+    building: String(room.building || room.name || "Campus"),
+    method: "directions",
+    createdAt: serverTimestamp()
   });
-  const room = building?.rooms.find((item) => item.id === selectedMapRoomId) || building?.rooms[0];
-  $("mapDestination").value = room?.id || "";
-  updateMapPlaceDetails();
-  updateCampusMapRoute();
-  updateCameraGuidance();
 }
 
-function updateCampusMapRoute() {
-  if (!campusMap) return;
-  if (campusMap.routeLine) {
-    campusMap.scene.remove(campusMap.routeLine);
-    campusMap.routeLine.geometry.dispose();
-    campusMap.routeLine.material.dispose();
-    campusMap.routeLine = null;
-  }
-  if (campusMap.locationMarker) {
-    campusMap.scene.remove(campusMap.locationMarker);
-    campusMap.locationMarker.geometry.dispose();
-    campusMap.locationMarker.material.dispose();
-    campusMap.locationMarker = null;
-  }
-
-  if (currentPosition) {
-    const point = projectCampusCoordinates(currentPosition);
-    if (point && Math.hypot(point.x, point.z) <= campusMap.radius * 2.5) {
-      const THREE = campusMap.THREE;
-      campusMap.locationMarker = new THREE.Mesh(
-        new THREE.SphereGeometry(1.1, 16, 12),
-        new THREE.MeshStandardMaterial({ color: 0x2878bf, emissive: 0x143d66 })
-      );
-      campusMap.locationMarker.position.set(point.x, 1.4, point.z);
-      campusMap.scene.add(campusMap.locationMarker);
-
-      const building = campusMapBuildings.find((item) => item.name === selectedMapBuilding);
-      const selectedRoom = building?.rooms.find((room) => room.id === selectedMapRoomId) || building?.rooms[0];
-      const destination = projectCampusCoordinates(roomCoordinates(selectedRoom) || building?.coordinates);
-      if (destination) {
-        const line = new THREE.BufferGeometry().setFromPoints([
-          new THREE.Vector3(point.x, 1.4, point.z),
-          new THREE.Vector3(destination.x, 1.4, destination.z)
-        ]);
-        campusMap.routeLine = new THREE.Line(line, new THREE.LineBasicMaterial({ color: 0x2878bf }));
-        campusMap.scene.add(campusMap.routeLine);
-      }
-    }
-  }
-}
-
-function resizeCampusMap() {
-  if (!campusMap) return;
-  const width = campusMap.container.clientWidth;
-  const height = campusMap.container.clientHeight;
-  if (!width || !height) return;
-  campusMap.renderer.setSize(width, height, false);
-  campusMap.camera.aspect = width / height;
-  campusMap.camera.updateProjectionMatrix();
-}
-
-async function renderCampusMap() {
-  const container = $("campusMap");
+function renderCampusMap() {
   const select = $("mapDestination");
-  campusMapBuildings = buildCampusPlaces(campusRooms);
-  const roomToBuilding = new Map();
-  campusMapBuildings.forEach((building) => {
-    building.rooms.forEach((room) => roomToBuilding.set(room.id, building));
-  });
-  select.innerHTML = `<option value="">Choose a room or location</option>${campusRooms
-    .slice()
-    .sort((a, b) => roomTitle(a).localeCompare(roomTitle(b)))
-    .map((room) => {
-      const building = roomToBuilding.get(room.id);
-      return `<option value="${esc(room.id)}">${esc(roomTitle(room))} — ${esc(building.name)}</option>`;
-    }).join("")}`;
+  const destinations = campusRooms.slice().sort((a, b) => roomTitle(a).localeCompare(roomTitle(b)));
+  select.innerHTML = `<option value="">Choose a room or location</option>${destinations
+    .map((room) => `<option value="${esc(room.id)}">${esc(roomTitle(room))} — ${esc(room.building || room.name || "Campus")}</option>`)
+    .join("")}`;
+  if (!destinations.some((room) => room.id === selectedMapRoomId)) selectedMapRoomId = "";
+  select.value = selectedMapRoomId;
   select.onchange = () => {
-    const room = campusRooms.find((item) => item.id === select.value);
-    if (room) selectCampusBuilding(roomToBuilding.get(room.id).name, room.id);
-    else selectCampusBuilding("");
+    selectedMapRoomId = select.value;
+    pendingArrivalRoomId = "";
+    $("confirmArrival").hidden = true;
+    updateMapPlaceDetails();
+    updateCameraGuidance();
   };
-
-  if (!campusMapBuildings.length) {
-    container.innerHTML = '<p class="campus-map-message" role="status">No campus locations have been added yet. Ask an administrator to add rooms to build the map.</p>';
-    return;
-  }
-
-  container.innerHTML = '<p class="campus-map-message" role="status">Preparing the interactive map…</p>';
-  try {
-    const THREE = await import("three");
-    const coordinates = campusMapBuildings.map((building) => building.coordinates).filter(Boolean);
-    const coordinateOrigin = coordinates.length
-      ? {
-          lat: coordinates.reduce((sum, point) => sum + point.lat, 0) / coordinates.length,
-          lng: coordinates.reduce((sum, point) => sum + point.lng, 0) / coordinates.length
-        }
-      : null;
-    const radians = Math.PI / 180;
-    const geographicPositions = campusMapBuildings
-      .filter((building) => building.coordinates)
-      .map((building) => ({
-        building,
-        x: (building.coordinates.lng - coordinateOrigin.lng) * 111320 *
-          Math.cos(coordinateOrigin.lat * radians),
-        z: -(building.coordinates.lat - coordinateOrigin.lat) * 110540
-      }));
-    const extent = geographicPositions.reduce((max, point) =>
-      Math.max(max, Math.abs(point.x), Math.abs(point.z)), 0);
-    const coordinateScale = extent > 0 ? 70 / extent : 1;
-    const positioned = geographicPositions.map((point) => ({
-      ...point,
-      x: point.x * coordinateScale,
-      z: point.z * coordinateScale
-    }));
-    const maxX = positioned.reduce((max, point) => Math.max(max, point.x), 0);
-    const unlocated = campusMapBuildings.filter((building) => !building.coordinates);
-    const fallbackColumns = Math.max(1, Math.ceil(Math.sqrt(unlocated.length)));
-    unlocated.forEach((building, index) => {
-      const row = Math.floor(index / fallbackColumns);
-      const column = index % fallbackColumns;
-      positioned.push({
-        building,
-        x: coordinates.length ? maxX + 18 + column * 17 : (column - (fallbackColumns - 1) / 2) * 17,
-        z: (row - (Math.ceil(unlocated.length / fallbackColumns) - 1) / 2) * 17
-      });
-    });
-
-    const mapMinX = positioned.reduce((min, point) => Math.min(min, point.x - 12), 0);
-    const mapMaxX = positioned.reduce((max, point) => Math.max(max, point.x + 12), 0);
-    const mapMinZ = positioned.reduce((min, point) => Math.min(min, point.z - 12), 0);
-    const mapMaxZ = positioned.reduce((max, point) => Math.max(max, point.z + 12), 0);
-    const mapWidth = Math.max(110, mapMaxX - mapMinX + 24);
-    const mapDepth = Math.max(110, mapMaxZ - mapMinZ + 24);
-    const target = new THREE.Vector3((mapMinX + mapMaxX) / 2, 0, (mapMinZ + mapMaxZ) / 2);
-
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xdcecf4);
-    scene.fog = new THREE.Fog(0xdcecf4, 150, 360);
-    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 500);
-    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "low-power" });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    container.innerHTML = "";
-    container.appendChild(renderer.domElement);
-    campusMap = {
-      THREE, container, scene, camera, renderer, target,
-      coordinateOrigin, coordinateScale,
-      theta: 0.72,
-      phi: 0.95,
-      distance: Math.max(68, Math.hypot(mapWidth, mapDepth) * 0.9),
-      radius: Math.max(mapWidth, mapDepth) / 2,
-      routeLine: null,
-      locationMarker: null
-    };
-
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x85977b, 2.1));
-    const sunlight = new THREE.DirectionalLight(0xffffff, 2.2);
-    sunlight.position.set(-45, 80, 35);
-    sunlight.castShadow = true;
-    scene.add(sunlight);
-
-    const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(mapWidth, mapDepth),
-      new THREE.MeshStandardMaterial({ color: 0xb8cbae, roughness: 1 })
-    );
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.set(target.x, -0.15, target.z);
-    ground.receiveShadow = true;
-    scene.add(ground);
-
-    const gridSize = Math.max(mapWidth, mapDepth);
-    const grid = new THREE.GridHelper(gridSize, Math.max(10, Math.ceil(gridSize / 8)), 0x94a98d, 0xa7b89e);
-    grid.position.set(target.x, -0.1, target.z);
-    scene.add(grid);
-
-    const pathMaterial = new THREE.MeshStandardMaterial({ color: 0xe5e0d1, roughness: 1 });
-    const path = new THREE.Mesh(new THREE.BoxGeometry(mapWidth * 0.76, 0.08, 3), pathMaterial);
-    path.position.set(target.x, 0, target.z);
-    scene.add(path);
-    const crossPath = new THREE.Mesh(new THREE.BoxGeometry(3, 0.08, mapDepth * 0.76), pathMaterial);
-    crossPath.position.set(target.x, 0, target.z);
-    scene.add(crossPath);
-
-    positioned.forEach((point, index) => addCampusBuilding(THREE, point.building, index, point));
-    setCampusMapCamera();
-    resizeCampusMap();
-    if ("ResizeObserver" in window) {
-      mapResizeObserver = new ResizeObserver(resizeCampusMap);
-      mapResizeObserver.observe(container);
-    }
-    window.addEventListener("resize", resizeCampusMap);
-
-    const raycaster = new THREE.Raycaster();
-    const pointer = new THREE.Vector2();
-    let pointerStart = null;
-    let lastX = 0;
-    let lastY = 0;
-    renderer.domElement.addEventListener("pointerdown", (event) => {
-      pointerStart = { x: event.clientX, y: event.clientY };
-      lastX = event.clientX;
-      lastY = event.clientY;
-      renderer.domElement.setPointerCapture(event.pointerId);
-    });
-    renderer.domElement.addEventListener("pointermove", (event) => {
-      if (!pointerStart || !(event.buttons & 1)) return;
-      const deltaX = event.clientX - lastX;
-      const deltaY = event.clientY - lastY;
-      lastX = event.clientX;
-      lastY = event.clientY;
-      campusMap.theta -= deltaX * 0.008;
-      campusMap.phi = Math.max(0.25, Math.min(1.42, campusMap.phi + deltaY * 0.006));
-      setCampusMapCamera();
-    });
-    renderer.domElement.addEventListener("pointerup", (event) => {
-      const moved = pointerStart && Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y) > 5;
-      pointerStart = null;
-      if (moved) return;
-      const bounds = renderer.domElement.getBoundingClientRect();
-      pointer.set(
-        ((event.clientX - bounds.left) / bounds.width) * 2 - 1,
-        -((event.clientY - bounds.top) / bounds.height) * 2 + 1
-      );
-      raycaster.setFromCamera(pointer, camera);
-      const hit = raycaster.intersectObjects(campusMapBuildings.map((building) => building.mesh), false)[0];
-      if (hit?.object.userData.building) selectCampusBuilding(hit.object.userData.building.name);
-    });
-    renderer.domElement.addEventListener("pointercancel", () => { pointerStart = null; });
-    renderer.domElement.addEventListener("wheel", (event) => {
-      event.preventDefault();
-      campusMap.distance = Math.max(18, Math.min(campusMap.radius * 4, campusMap.distance * (event.deltaY > 0 ? 1.1 : 0.9)));
-      setCampusMapCamera();
-    }, { passive: false });
-    container.addEventListener("keydown", (event) => {
-      if (event.key === "ArrowLeft") campusMap.theta -= 0.1;
-      else if (event.key === "ArrowRight") campusMap.theta += 0.1;
-      else if (event.key === "ArrowUp") campusMap.phi = Math.max(0.25, campusMap.phi - 0.08);
-      else if (event.key === "ArrowDown") campusMap.phi = Math.min(1.42, campusMap.phi + 0.08);
-      else if (event.key === "+" || event.key === "=") campusMap.distance = Math.max(18, campusMap.distance * 0.9);
-      else if (event.key === "-") campusMap.distance = Math.min(campusMap.radius * 4, campusMap.distance * 1.1);
-      else return;
-      event.preventDefault();
-      setCampusMapCamera();
-    });
-    $("mapZoomIn").onclick = () => {
-      if (!campusMap) return;
-      campusMap.distance = Math.max(18, campusMap.distance * 0.82);
-      setCampusMapCamera();
-    };
-    $("mapZoomOut").onclick = () => {
-      if (!campusMap) return;
-      campusMap.distance = Math.min(campusMap.radius * 4, campusMap.distance * 1.22);
-      setCampusMapCamera();
-    };
-    $("mapReset").onclick = () => {
-      if (!campusMap) return;
-      campusMap.theta = 0.72;
-      campusMap.phi = 0.95;
-      campusMap.distance = Math.max(68, Math.hypot(mapWidth, mapDepth) * 0.9);
-      setCampusMapCamera();
-    };
-    renderer.setAnimationLoop(() => renderer.render(scene, camera));
-    if (selectedMapBuilding) {
-      const stillExists = campusMapBuildings.find((building) => building.name === selectedMapBuilding);
-      if (!stillExists) selectedMapBuilding = null;
-    }
-    if (selectedMapBuilding) selectCampusBuilding(selectedMapBuilding, selectedMapRoomId);
-    else {
-      if (currentPosition) updateCampusMapRoute();
-      updateMapPlaceDetails();
-    }
-  } catch (error) {
-    console.error("Could not initialize the 3D campus map:", error);
-    campusMap = null;
-    container.innerHTML = '<p class="campus-map-message error-state" role="status">The 3D map could not be loaded. Check your internet connection or use the mapped rooms list below.</p>';
-  }
+  updateMapPlaceDetails();
+  updateCameraGuidance();
 }
 
 function updateCampusMapLocation() {
-  updateCampusMapRoute();
   updateMapPlaceDetails();
   updateCameraGuidance();
 }
-
 function handleDeviceOrientation(event) {
   if (Number.isFinite(event.webkitCompassHeading)) {
     cameraHeading = event.webkitCompassHeading;
@@ -631,11 +334,10 @@ function updateCameraGuidance() {
   if (!cameraStream) return;
   const marker = $("cameraMarker");
   const arrow = marker.querySelector(".camera-marker-arrow");
-  const building = campusMapBuildings.find((item) => item.name === selectedMapBuilding);
-  const room = building?.rooms.find((item) => item.id === selectedMapRoomId) || building?.rooms[0];
-  const destination = roomCoordinates(room) || building?.coordinates;
+  const room = selectedMapRoom();
+  const destination = roomCoordinates(room);
   const status = $("cameraStatus");
-  if (!building || !room) {
+  if (!room) {
     marker.hidden = true;
     status.textContent = "Choose a room from Find a room to show its direction in the camera view.";
     return;
@@ -692,7 +394,45 @@ function stopCameraView(message = "") {
   $("cameraView").hidden = true;
   $("cameraToggle").textContent = "Use camera";
   $("cameraMarker").hidden = true;
+  $("confirmArrival").hidden = true;
+  pendingArrivalRoomId = "";
   if (message) $("cameraStatus").textContent = message;
+}
+
+async function confirmCameraArrival() {
+  const room = selectedMapRoom();
+  const button = $("confirmArrival");
+  if (currentRole !== "student" || !currentStudentNumber ||
+      !currentUser || !room || pendingArrivalRoomId !== room.id || arrivalRecordedRoomIds.has(room.id)) {
+    return;
+  }
+
+  button.disabled = true;
+  $("cameraStatus").textContent = "Recording your arrival…";
+  try {
+    await addDoc(collection(db, "transactions"), {
+      userId: currentUser.uid,
+      studentNumber: currentStudentNumber,
+      roomId: room.id,
+      roomNumber: String(room.roomNumber),
+      building: String(room.building || room.name || "Campus"),
+      method: "camera",
+      createdAt: serverTimestamp()
+    });
+    arrivalRecordedRoomIds.add(room.id);
+    pendingArrivalRoomId = "";
+    $("recognitionStatus").textContent = `Arrival recorded for ${roomTitle(room)}. Thank you for checking in.`;
+    $("cameraStatus").textContent = "Your destination visit has been recorded.";
+    $("feedbackPrompt").hidden = false;
+    openSection("evaluation");
+    $("rating").focus();
+  } catch (error) {
+    console.error("Could not record destination arrival:", error);
+    $("cameraStatus").textContent = "Could not record your arrival. Check your connection and try again.";
+  } finally {
+    button.disabled = false;
+    button.hidden = true;
+  }
 }
 
 function loadTesseractScript() {
@@ -715,19 +455,13 @@ function loadTesseractScript() {
   return tesseractScriptPromise;
 }
 
-function recognizedCampusPlace(text) {
-  const words = text.toLowerCase().replace(/[^a-z0-9]+/g, " ");
-  if (/\bclinic\b/.test(words)) return "Clinic";
-  const hasComputer = /\bcomputer\b/.test(words);
-  const hasLaboratory = /\b(lab|laboratory|laboratories)\b/.test(words) || words.includes("laborat");
-  return hasComputer && hasLaboratory ? "Computer Laboratory" : "";
-}
-
-function selectedPlaceMatches(place) {
-  const selected = String(selectedMapBuilding || "").toLowerCase();
-  if (!selected) return null;
-  if (place === "Clinic") return selected.includes("clinic");
-  return selected.includes("computer") || selected.includes("comlab") || selected.includes("laboratory");
+function recognizesRoomNumber(text, room) {
+  const expected = String(room?.roomNumber || "")
+    .replace(/^(room|rm|no\.?)\s*/i, "")
+    .replace(/[^a-z0-9]/gi, "");
+  if (!expected) return false;
+  const pattern = [...expected].join("[^a-z0-9]*");
+  return new RegExp(`(^|[^a-z0-9])${pattern}(?=$|[^a-z0-9])`, "i").test(text);
 }
 
 async function recognizeCameraSign(stream, session) {
@@ -744,17 +478,34 @@ async function recognizeCameraSign(stream, session) {
     const result = await recognitionWorker.recognize(canvas);
     if (session !== recognitionSession || cameraStream !== stream) return;
 
-    const place = recognizedCampusPlace(result.data.text || "");
-    if (!place) {
-      $("recognitionStatus").textContent = "No clear Clinic or Computer Laboratory sign found yet. Aim at the sign and move closer.";
+    const text = result.data.text || "";
+    const room = selectedMapRoom();
+    if (!room) {
+      $("confirmArrival").hidden = true;
+      $("recognitionStatus").textContent = "Choose a destination first, then point the camera at its room number.";
       return;
     }
-
-    const selectedMatch = selectedPlaceMatches(place);
-    if (selectedMatch === false) {
-      $("recognitionStatus").textContent = `Possible mismatch: the camera reads “${place},” but the map selection is “${selectedMapBuilding}.” Verify the sign.`;
+    if (arrivalRecordedRoomIds.has(room.id)) {
+      $("confirmArrival").hidden = true;
+      $("recognitionStatus").textContent = `Arrival for ${roomTitle(room)} is already recorded.`;
+      return;
+    }
+    if (!room.roomNumber) {
+      $("confirmArrival").hidden = true;
+      $("recognitionStatus").textContent = "This destination has no room number to check. Ask an administrator to add one.";
+      return;
+    }
+    if (recognizesRoomNumber(text, room)) {
+      pendingArrivalRoomId = room.id;
+      $("confirmArrival").textContent = `Confirm arrival at ${roomTitle(room)}`;
+      $("confirmArrival").hidden = currentRole !== "student" || !currentStudentNumber;
+      $("recognitionStatus").textContent = currentRole === "student" && currentStudentNumber
+        ? `Possible match for ${roomTitle(room)}. Verify you are there, then confirm arrival.`
+        : "Room number recognized. Arrival tracking is available to student accounts with a linked student number.";
     } else {
-      $("recognitionStatus").textContent = `Possible match: “${place}” sign detected. Please verify the room before entering.`;
+      pendingArrivalRoomId = "";
+      $("confirmArrival").hidden = true;
+      $("recognitionStatus").textContent = `Looking for room number ${room.roomNumber}. Aim at the destination sign and move closer.`;
     }
   } catch (error) {
     if (session === recognitionSession && cameraStream === stream) {
@@ -779,7 +530,7 @@ async function startSignRecognition(stream) {
       return;
     }
     recognitionWorker = worker;
-    status.textContent = "Point the camera at the Clinic or Computer Laboratory sign.";
+    status.textContent = "Point the camera at the selected destination’s room number.";
     recognitionInterval = window.setInterval(() => recognizeCameraSign(stream, session), 1800);
     await recognizeCameraSign(stream, session);
   } catch (error) {
@@ -910,7 +661,7 @@ function renderRooms() {
       <h3>${esc(roomTitle(room))}</h3>
       <p>${esc(room.description || room.roomType || "Campus room")}</p>
       ${showDistance && distance !== null ? `<p class="distance-label">${distance < 1000 ? `${Math.round(distance)} m` : `${(distance / 1000).toFixed(1)} km`} from you</p>` : ""}
-      ${direction ? `<a class="text-link" href="${esc(direction)}" target="_blank" rel="noopener noreferrer">${currentPosition && coords ? "Get directions" : "View location"} <span aria-hidden="true">↗</span></a>` : (coords ? "" : '<p class="muted-note">Location coordinates not added yet.</p>')}
+      ${direction ? `<a class="text-link" data-map-directions data-room-id="${esc(room.id)}" href="${esc(direction)}" target="_blank" rel="noopener noreferrer">${currentPosition && coords ? "Get directions" : "View location"} <span aria-hidden="true">↗</span></a>` : (coords ? "" : '<p class="muted-note">Location coordinates not added yet.</p>')}
       </div>
     </article>`;
   };

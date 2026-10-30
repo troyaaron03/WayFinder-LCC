@@ -24,6 +24,13 @@ button{cursor:pointer}
 .section-tab{flex:none;padding:12px 15px;border:0;border-bottom:2px solid transparent;background:transparent;color:#748078;font-size:13px;font-weight:700}
 .section-tab:hover{color:#1c5b9e}
 .section-tab.active{border-bottom-color:#1e5a9f;color:#164a83}
+.account-notice{margin:-16px 0 24px;padding:12px 14px;border:1px solid #f0d7a8;border-radius:10px;background:#fff8e9;color:#77530d;font-size:12px;line-height:1.55}
+.account-notice>p{margin:0}
+.account-setup-form{display:grid;gap:8px;margin-top:12px}
+.account-setup-form label{font-weight:700}
+.account-setup-fields{display:flex;gap:8px}
+.account-setup-fields input{min-width:0;max-width:210px;padding:9px 11px;border:1px solid #dfd5bd;border-radius:8px;background:#fff}
+.account-setup-form [role=status]{margin:0}
 .dashboard-section{display:none}
 .dashboard-section.active{display:block}
 .section-heading{display:flex;align-items:flex-end;justify-content:space-between;margin:0 0 20px}
@@ -36,9 +43,8 @@ button{cursor:pointer}
 .campus-map-tools select{min-width:0;max-width:440px;flex:1;padding:10px 12px;border:1px solid #dfe5dc;border-radius:9px;background:#fff;color:#294966;font-size:13px}
 .campus-map-tools select:focus,.map-control:focus-visible{outline:3px solid #8fc5ff88;outline-offset:2px}
 .campus-map-actions{display:flex;gap:6px;margin-left:auto}
-.map-control{min-width:38px;min-height:38px;padding:0 10px;border:1px solid #dfe5dc;border-radius:8px;background:#fff;color:#2b5078;font-size:18px;font-weight:700}
+.map-control{min-width:38px;min-height:38px;padding:0 10px;border:1px solid #dfe5dc;border-radius:8px;background:#fff;color:#2b5078;font-size:12px;font-weight:700}
 .map-control:hover{border-color:#a8bed7;background:#f7fafe}
-.map-control.map-reset{font-size:12px}
 .camera-view{position:relative;min-height:250px;overflow:hidden;margin:0 0 14px;border:1px solid #233c47;border-radius:15px;background:#18272e}
 .camera-view video{display:block;width:100%;max-height:520px;min-height:250px;object-fit:cover}
 .camera-overlay{position:absolute;inset:0;pointer-events:none}
@@ -49,17 +55,12 @@ button{cursor:pointer}
 .camera-marker-arrow{color:#ffd76a;font-size:35px;filter:drop-shadow(0 2px 3px #000)}
 .camera-marker span:last-child{padding:5px 9px;border-radius:8px;background:#102f56dc;font-size:12px;font-weight:750}
 .camera-status{position:absolute;right:10px;bottom:10px;left:10px;margin:0;padding:9px 12px;border-radius:8px;background:#102f56dc;color:white;text-align:center;font-size:12px;line-height:1.5}
-.campus-map-layout{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:14px}
-.campus-map{position:relative;min-width:0;min-height:420px;overflow:hidden;border:1px solid #dfe8df;border-radius:15px;background:linear-gradient(180deg,#dcecf4 0%,#e8f0e5 48%,#dce8d9 100%);touch-action:none}
-.campus-map canvas{display:block;width:100%;height:100%;outline:none}
-.campus-map-message{position:absolute;inset:0;display:grid;place-items:center;margin:0;padding:24px;color:#52675a;text-align:center;font-size:13px}
-.map-place-details{align-self:stretch;padding:19px;border:1px solid #e7ebe3;border-radius:15px;background:#fff}
+.camera-arrival-button{position:absolute;z-index:1;bottom:66px;left:50%;min-height:40px;padding:0 15px;border:0;border-radius:9px;background:#fff;color:#164d8f;font-size:12px;font-weight:750;transform:translateX(-50%)}
+.camera-arrival-button:hover{background:#eaf2fc}
+.map-place-details{padding:19px;border:1px solid #e7ebe3;border-radius:15px;background:#fff}
 .map-place-details h3{margin:8px 0;font-size:17px}
 .map-place-details p{margin:0;color:#748078;font-size:12px;line-height:1.7}
 .map-place-details .text-link{margin-top:12px}
-.map-room-list{display:grid;gap:8px;margin:14px 0 0;padding:0;list-style:none}
-.map-room-list li{padding-top:8px;border-top:1px solid #eff1ed;color:#294966;font-size:11px;line-height:1.5}
-.campus-map-note{margin:9px 0 0;color:#879189;font-size:11px;line-height:1.6}
 .location-panel{display:flex;align-items:center;gap:17px;padding:21px;border:1px solid #e7ebe3;border-radius:15px;background:#fff}
 .location-icon{display:grid;flex:none;width:45px;height:45px;place-items:center;border-radius:13px;background:#e9f2fa;color:#316fa8;font-size:28px}
 .location-copy{flex:1}
@@ -107,8 +108,7 @@ button{cursor:pointer}
 .app-footer{margin-top:42px;padding:19px 0;border-top:1px solid #e5eae2;color:#89938b;font-size:11px}
 .app-footer span{padding:0 5px;color:#b7c0b8}
 [hidden]{display:none!important}
-@media(max-width:760px){.campus-map-layout{grid-template-columns:1fr}.campus-map{min-height:350px}.map-place-details{min-height:130px}}
-@media(max-width:640px){.app-header{min-height:62px;padding:0 17px}.app-main{width:calc(100% - 30px);padding-top:22px}.welcome-banner{min-height:188px;padding:25px 22px}.welcome-symbol{width:68px;height:68px;font-size:40px}.welcome-banner p{font-size:12px}.section-nav{margin:20px 0 25px}.section-tab{padding:11px 12px;font-size:12px}.location-panel{flex-wrap:wrap;gap:12px;padding:16px}.location-copy{min-width:calc(100% - 62px)}.location-button{width:100%}.location-summary{align-items:flex-start;flex-wrap:wrap}.location-summary .muted-note{width:100%;margin-left:18px}.section-heading h2{font-size:24px}.qr-card{gap:12px;padding:12px}.qr-card-image,.qr-image{width:112px;height:112px}.user-email{display:none}.campus-map-tools{align-items:stretch;flex-wrap:wrap}.campus-map-tools label{width:100%}.campus-map-tools select{max-width:none;flex-basis:100%}.campus-map-actions{margin-left:0}.campus-map{min-height:310px}}
+@media(max-width:640px){.app-header{min-height:62px;padding:0 17px}.app-main{width:calc(100% - 30px);padding-top:22px}.welcome-banner{min-height:188px;padding:25px 22px}.welcome-symbol{width:68px;height:68px;font-size:40px}.welcome-banner p{font-size:12px}.section-nav{margin:20px 0 25px}.section-tab{padding:11px 12px;font-size:12px}.location-panel{flex-wrap:wrap;gap:12px;padding:16px}.location-copy{min-width:calc(100% - 62px)}.location-button{width:100%}.location-summary{align-items:flex-start;flex-wrap:wrap}.location-summary .muted-note{width:100%;margin-left:18px}.section-heading h2{font-size:24px}.qr-card{gap:12px;padding:12px}.qr-card-image,.qr-image{width:112px;height:112px}.user-email{display:none}.campus-map-tools{align-items:stretch;flex-wrap:wrap}.campus-map-tools label{width:100%}.campus-map-tools select{max-width:none;flex-basis:100%}.campus-map-actions{margin-left:0}}
 .brand-mark{display:block;flex:none;object-fit:cover;border-radius:8px;background:#fff}
 .campus-art{height:164px;background-image:linear-gradient(0deg,rgba(20,74,145,.4),rgba(35,111,190,.2)),url("assets/campus-building.jpg");background-position:center;background-size:cover}
 .qr-card{display:grid;grid-template-columns:minmax(0,1fr);align-items:start;gap:14px;padding:14px}

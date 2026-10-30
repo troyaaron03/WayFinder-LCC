@@ -6,9 +6,46 @@ setup and uses Tailwind CSS for the browser UI.
 
 FIREBASE SETUP
 1. Enable Email/Password in Firebase Authentication.
-2. Create a Firestore database.
-3. Add an administrator document at users/{UID} with role = admin.
-4. Publish firestore.rules from this folder.
+2. Keep Email/Password enabled in Firebase Authentication. Email verification is not required by this app.
+3. Create a Firestore database.
+4. Add an administrator document at users/{UID} with role = admin. To enable
+   role promotion, provision at least one trusted superadmin by setting that
+   account's users/{UID} document role to superadmin in the Firebase console.
+5. Publish the updated Firestore rules first:
+   firebase deploy --only firestore:rules --project campus-navigation-system-4292f
+6. Deploy the student-number and account-role Cloud Functions:
+   firebase deploy --only functions --project campus-navigation-system-4292f
+   Enter the Firebase Web API key when prompted for FIREBASE_WEB_API_KEY. This
+   is the same public key used in the app configuration, not an admin secret.
+   Cloud Functions deployment requires the Firebase project to have billing
+   enabled.
+
+SIGN-IN
+Sign in with the campus email used to create the account. Student numbers are
+used for registration, account records, and student arrival tracking; they are
+not accepted as a login identifier.
+
+ADMIN USER LIST TROUBLESHOOTING
+The admin User accounts page lists Firebase Authentication users through the
+listUserAccounts Cloud Function. If it reports an internal error, the page
+falls back to Firestore profiles, but accounts without profiles will not appear.
+Deploy the latest Cloud Functions and grant the function runtime service account
+the Firebase Authentication Admin role in Google Cloud IAM. The fallback also
+requires the latest Firestore rules to be published.
+
+STUDENT ACCOUNTS
+Students register with an 8-digit student number, campus email, and a password
+of at least 8 characters containing at least one uppercase letter. Email
+verification is not required for sign-in. Students sign in with their campus
+email; the student number is linked privately to their account and used for
+arrival records.
+
+Admins can assign student or visitor roles. Visitors can sign in and browse the
+campus directory, but cannot create arrival transactions. Only superadmins can
+assign admin or superadmin roles. Manage accounts from the admin User accounts
+tab. At least one superadmin must be provisioned directly in Firestore before
+anyone can grant elevated roles. Role management and account setup require the
+Cloud Functions to be deployed. Student numbers are not used to sign in.
 
 RUN
 Open the cns folder in VS Code and use Live Server on index.html. The Tailwind
@@ -34,26 +71,20 @@ The Computer Lab entry defaults to 14.803056, 121.069722, converted from the
 coordinates supplied for the campus. Administrators should verify the pin is at
 the correct entrance before relying on directions.
 
-3D CAMPUS VIEW
-The student map includes an interactive schematic 3D view generated from room
-records. Buildings with coordinates are positioned relative to one another;
-records without coordinates are shown in an illustrative layout. The building
-shapes are placeholders, not surveyed or architecturally accurate models. The
-view uses Three.js from a public CDN, so an internet connection is required.
-For a true campus replica or indoor navigation, provide surveyed building
-coordinates and custom 3D models or floor plans.
+MAP DIRECTIONS, ARRIVALS, AND FEEDBACK
+Students can choose a destination from the room directory, request their
+current location, and open available routes in Google Maps. Opening a route
+shows the feedback form in Campus Wayfinder. Students can also select Use
+camera; on-device OCR checks for the selected room number. After OCR finds a
+possible match, the student must confirm they have arrived. This creates a
+destination visit record that admins can review. Opening a Google Maps route
+also records a map-use transaction. Both actions open the feedback form.
+OCR is approximate and confirmation is not proof of physical location. Camera
+frames are processed on the device and are not recorded or uploaded.
 
-CAMERA GUIDANCE
-Students may opt in to a live camera view from the map page. The browser asks
-for camera permission only after the student chooses Use camera. The browser
-uses on-device OCR to look for "Computer Laboratory" and "Clinic" in the live
-view. Frames are processed in the browser and are not recorded or uploaded.
-OCR and camera access need an internet connection to load the library and
-HTTPS or localhost for camera access. The sign check is only a possible match,
-not proof that the student is at the correct room; point the camera at a
-readable room sign and verify it in person. Students can still use the map
-without granting camera or location access. Compatible devices may also ask
-for compass/orientation permission for the approximate destination indicator.
+Camera access and OCR need an internet connection to load the recognition
+library and HTTPS or localhost for camera access. Students can still use room
+directions without granting camera or location access.
 
 QR GUIDES
 Administrators add a guide name and an HTTP/HTTPS destination. The app generates
@@ -67,6 +98,7 @@ image is kept below approximately 700 KB. This is suitable for a modest
 prototype, not a large production image library.
 
 IMPORTANT
-Keep Firestore Security Rules enabled. Students can submit feedback and read
-campus information; only admins can manage campus records or read feedback.
+Keep Firestore Security Rules enabled. Verified students can read campus
+information, submit feedback, and create their own arrival records; only admins
+can manage campus records and review feedback and destination visits.
 Do not put passwords in project files.

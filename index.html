@@ -41,17 +41,21 @@
           <label for="password">Password</label>
           <input id="password" name="password" type="password" autocomplete="current-password" required placeholder="Enter your password">
           <button class="primary-button" type="submit">Sign in <span aria-hidden="true">→</span></button>
+          <p class="form-hint">Sign in with the campus email used to create your account.</p>
           <p class="form-switch">New to Campus Wayfinder? <button type="button" id="showRegister">Create an account</button></p>
         </form>
 
         <form id="registerForm" class="auth-form" hidden>
+          <label for="studentNumber">Student number</label>
+          <input id="studentNumber" name="studentNumber" type="text" inputmode="numeric" autocomplete="off" required pattern="[0-9]{8}" maxlength="8" title="Enter your 8-digit student number" placeholder="8 digits">
           <label for="registerEmail">Campus email</label>
-          <input id="registerEmail" name="email" type="email" autocomplete="username" required placeholder="you@campus.edu">
+          <input id="registerEmail" name="email" type="email" autocomplete="email" required placeholder="you@campus.edu">
           <label for="registerPassword">Password</label>
-          <input id="registerPassword" name="new-password" type="password" autocomplete="new-password" required minlength="6" placeholder="At least 6 characters">
+          <input id="registerPassword" name="new-password" type="password" autocomplete="new-password" required minlength="8" pattern="(?=.*[A-Z]).{8,}" title="At least 8 characters and 1 uppercase letter" placeholder="8+ characters, include 1 capital letter">
           <label for="confirmPassword">Confirm password</label>
-          <input id="confirmPassword" name="confirm-password" type="password" autocomplete="new-password" required minlength="6" placeholder="Enter it again">
+          <input id="confirmPassword" name="confirm-password" type="password" autocomplete="new-password" required minlength="8" placeholder="Enter it again">
           <button class="primary-button" type="submit">Create student account <span aria-hidden="true">→</span></button>
+          <p class="form-hint">Use your campus email and password to sign in after creating your account.</p>
           <p class="form-switch">Already have an account? <button type="button" id="showLogin">Sign in</button></p>
         </form>
         <p id="msg" role="status" aria-live="polite"></p>

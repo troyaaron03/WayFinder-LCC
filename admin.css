@@ -59,6 +59,17 @@ button{cursor:pointer}
 .head>button{min-height:42px;white-space:nowrap}
 .head>.secondary-button{border:1px solid #dfe5dc;background:#fff;color:#285789}
 .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr));gap:16px}
+.user-account-card{overflow-wrap:anywhere}
+.user-list-notice{margin:0 0 16px;padding:12px 14px;border:1px solid #f0d7a8;border-radius:10px;background:#fff8e9;color:#77530d;font-size:12px;line-height:1.55}
+.user-account-id{font-size:10px!important}
+.user-role-form label{display:block;margin:14px 0 6px;color:#39483d;font-size:12px;font-weight:750}
+.user-role-controls{display:flex;gap:8px}
+.user-role-controls select{min-width:0;flex:1;padding:9px 10px;border:1px solid #dfe5dc;border-radius:8px;background:#fff;color:#294966}
+.user-role-controls button,.load-more-users{padding:9px 12px;border:0;border-radius:8px;background:#164d8f;color:#fff;font-size:11px;font-weight:750}
+.user-role-controls button:disabled,.load-more-users:disabled{cursor:wait;opacity:.65}
+.user-role-message{min-height:1em;margin:8px 0 0!important;font-size:11px!important}
+.user-role-protection{padding:8px 10px;border-radius:8px;background:#f3f6f1;font-size:11px!important}
+.load-more-users{display:block;margin:20px auto 0}
 .card{min-width:0;overflow:hidden;padding:18px;border:1px solid #e9ede6;border-radius:15px;background:#fff}
 .card h3{margin:8px 0;font-size:17px}
 .card p{color:#748078;font-size:12px;line-height:1.7}

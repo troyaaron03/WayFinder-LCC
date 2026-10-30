@@ -4,6 +4,7 @@ import { defaultRoomCoordinates } from "./campus-locations.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
 
 import { getFirestore, collection, addDoc, getDocs, doc, getDoc, updateDoc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-functions.js";
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: "AIzaSyCDuxFyTm3pYIsrO5i5ivTKZyM4SZYnpqM",
@@ -18,11 +19,17 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const functions = getFunctions(app);
+const listUserAccountsCall = httpsCallable(functions, "listUserAccounts");
+const setUserAccountRoleCall = httpsCallable(functions, "setUserAccountRole");
 
 const $ = (id) => document.getElementById(id);
 const modal = $("modal");
 const form = $("form");
 const title = $("title");
+let managerRole = "";
+let userPageToken = null;
+let currentUserAccounts = [];
 
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
@@ -31,16 +38,22 @@ onAuthStateChanged(auth, async (user) => {
   }
   try {
     const profile = await getDoc(doc(db, "users", user.uid));
-    if (!profile.exists() || profile.data().role !== "admin") {
+    if (!profile.exists() || !["admin", "superadmin"].includes(profile.data().role)) {
       alert("Admin access required.");
       await signOut(auth);
       location.href = "index.html";
       return;
     }
+    managerRole = profile.data().role;
+    $("users").querySelector("p").textContent = managerRole === "superadmin"
+      ? "Manage registered accounts and assign roles."
+      : "Manage student and visitor accounts. Only superadmins can assign admin or superadmin access.";
     loadFaculty();
     loadRooms();
     loadQrCodes();
     loadFeedback();
+    loadTransactions();
+    loadUserAccounts(true);
   } catch (error) {
     console.error(error);
     alert("Could not verify your admin profile. Check your Firestore rules.");
@@ -53,6 +66,9 @@ $("addFaculty").onclick = () => faculty();
 $("addRoom").onclick = () => room();
 $("addQrCode").onclick = () => qrCode();
 $("refreshFeedback").onclick = () => loadFeedback();
+$("refreshTransactions").onclick = () => loadTransactions();
+$("refreshUsers").onclick = () => loadUserAccounts(true);
+$("loadMoreUsers").onclick = () => loadUserAccounts(false);
 
 document.querySelectorAll(".admin-nav button").forEach((button) => {
   button.onclick = () => {
@@ -68,6 +84,117 @@ function showTab(tabId) {
   });
   document.querySelectorAll(".admin-main > section").forEach((section) => {
     section.classList.toggle("active", section.id === tabId);
+  });
+}
+
+async function loadUserAccounts(reset) {
+  const list = $("userList");
+  const loadMore = $("loadMoreUsers");
+  if (reset) {
+    userPageToken = null;
+    currentUserAccounts = [];
+    $("userListNotice").hidden = true;
+    list.innerHTML = '<p class="empty-state">Loading registered accounts…</p>';
+  }
+  $("refreshUsers").disabled = true;
+  loadMore.disabled = true;
+  try {
+    const { data } = await listUserAccountsCall({ pageToken: userPageToken });
+    currentUserAccounts = currentUserAccounts.concat(data.accounts || []);
+    userPageToken = data.nextPageToken || null;
+    renderUserAccounts();
+    loadMore.hidden = !userPageToken;
+  } catch (error) {
+    console.error("Could not load user accounts:", error);
+    if (!reset || userPageToken) {
+      $("userListNotice").textContent = "Could not load the next page of Firebase Authentication accounts. Showing accounts loaded so far.";
+      $("userListNotice").hidden = false;
+      loadMore.hidden = true;
+      return;
+    }
+
+    try {
+      const profiles = await getDocs(collection(db, "users"));
+      currentUserAccounts = profiles.docs.map((profile) => {
+        const data = profile.data();
+        return {
+          uid: profile.id,
+          email: data.email || "",
+          role: ["student", "visitor", "admin", "superadmin"].includes(data.role) ? data.role : "student",
+          studentNumber: data.studentNumber || ""
+        };
+      });
+      renderUserAccounts();
+      $("userListNotice").textContent = "Firebase Authentication account listing is unavailable. Showing accounts with Firestore profiles only; accounts without a profile may be missing. Deploy the latest Cloud Functions and ensure their runtime service account has Firebase Authentication Admin access.";
+      $("userListNotice").hidden = false;
+      loadMore.hidden = true;
+    } catch (fallbackError) {
+      console.error("Could not load user profiles from Firestore:", fallbackError);
+      list.innerHTML = `<p class="error-text">Could not load accounts from Firebase Authentication or Firestore. Publish the latest Firestore rules and deploy the latest Cloud Functions. ${esc(fallbackError.message)}</p>`;
+      loadMore.hidden = true;
+    }
+  } finally {
+    $("refreshUsers").disabled = false;
+    loadMore.disabled = false;
+  }
+}
+
+function renderUserAccounts() {
+  const list = $("userList");
+  if (!currentUserAccounts.length) {
+    list.innerHTML = '<p class="empty-state">No registered user accounts were found.</p>';
+    return;
+  }
+
+  const currentUid = auth.currentUser?.uid;
+  list.innerHTML = currentUserAccounts.map((account) => {
+    const fixedRoleForAdmin = managerRole !== "superadmin" &&
+      ["admin", "superadmin"].includes(account.role);
+    const canEdit = account.uid !== currentUid && !fixedRoleForAdmin;
+    const roles = managerRole === "superadmin"
+      ? ["student", "visitor", "admin", "superadmin"]
+      : ["student", "visitor"];
+    return `<article class="card user-account-card">
+      <span class="card-kicker">${esc(account.role.toUpperCase())}</span>
+      <h3>${esc(account.email || "Email unavailable")}</h3>
+      <p><strong>Student number:</strong> ${esc(account.studentNumber || "Not linked")}</p>
+      <p class="user-account-id"><strong>Account ID:</strong> ${esc(account.uid)}</p>
+      ${canEdit ? `<form class="user-role-form" data-user-id="${esc(account.uid)}">
+        <label for="role-${esc(account.uid)}">Account role</label>
+        <div class="user-role-controls">
+          <select id="role-${esc(account.uid)}" name="role">
+            ${roles.map((role) => `<option value="${role}" ${role === account.role ? "selected" : ""}>${role}</option>`).join("")}
+          </select>
+          <button type="submit">Save role</button>
+        </div>
+        <p class="user-role-message" role="status" aria-live="polite"></p>
+      </form>` : `<p class="user-role-protection">${account.uid === currentUid ? "Your own role cannot be changed here." : "Only a superadmin can change this elevated role."}</p>`}
+    </article>`;
+  }).join("");
+
+  list.querySelectorAll(".user-role-form").forEach((roleForm) => {
+    roleForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const userId = roleForm.dataset.userId;
+      const role = roleForm.elements.role.value;
+      const button = roleForm.querySelector("button");
+      const message = roleForm.querySelector(".user-role-message");
+      button.disabled = true;
+      message.textContent = "Saving role…";
+      try {
+        await setUserAccountRoleCall({ userId, role });
+        message.textContent = "Role updated.";
+        await loadUserAccounts(true);
+      } catch (error) {
+        console.error("Could not update account role:", error);
+        message.textContent = error.code === "functions/permission-denied"
+          ? "Your role cannot assign that account role."
+          : error.code === "functions/failed-precondition"
+            ? error.message
+            : "Could not update this account. Check deployment and try again.";
+        button.disabled = false;
+      }
+    });
   });
 }
 
@@ -244,7 +371,7 @@ function room(data = {}, id = null) {
     <label>Longitude (optional)</label>
     <input id="longitude" type="number" step="any" min="-180" max="180"
       value="${esc(data.longitude ?? defaultCoordinates?.longitude ?? "")}" placeholder="e.g. 120.9842">
-    <small class="hint">Add both coordinates to enable GPS distance, Google Maps directions, and geographic placement in the student 3D campus view. The Computer Lab default is 14.803056, 121.069722; verify its pin is at the correct entrance.</small>
+    <small class="hint">Add both coordinates to enable GPS distance and Google Maps directions for students. The Computer Lab default is 14.803056, 121.069722; verify its pin is at the correct entrance.</small>
     <label>Room Type</label>
     <input id="roomType" placeholder="Classroom, Laboratory, Office, etc." value="${esc(data.roomType)}">
     <label>Description</label>
@@ -690,5 +817,31 @@ async function loadFeedback() {
         Could not load feedback: ${esc(error.message)}
       </p>
     `;
+  }
+}
+
+async function loadTransactions() {
+  const list = $("transactionList");
+  list.innerHTML = "<p>Loading destination visits...</p>";
+  try {
+    const snapshot = await getDocs(query(collection(db, "transactions"), orderBy("createdAt", "desc")));
+    if (snapshot.empty) {
+      list.innerHTML = '<p class="empty-state">No destination visits have been recorded yet.</p>';
+      return;
+    }
+
+    list.innerHTML = snapshot.docs.map((item) => {
+      const data = item.data();
+      const date = data.createdAt?.toDate ? data.createdAt.toDate().toLocaleString() : "Date unavailable";
+      return `<article class="card">
+        <span class="card-kicker">${data.method === "camera" ? "CONFIRMED ARRIVAL" : "MAP DIRECTIONS"}</span>
+        <h3>${esc(data.building || "Campus")} · ${esc(data.roomNumber || "Room unavailable")}</h3>
+        <p><strong>Student number:</strong> ${esc(data.studentNumber || "Unavailable")}</p>
+        <p><strong>Recorded:</strong> ${esc(date)}</p>
+      </article>`;
+    }).join("");
+  } catch (error) {
+    console.error("Could not load destination visits:", error);
+    list.innerHTML = `<p class="error-text">Could not load destination visits: ${esc(error.message)}</p>`;
   }
 }

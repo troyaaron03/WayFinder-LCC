@@ -26,6 +26,17 @@
       <button class="section-tab" type="button" data-target="qrCodes">QR guides</button>
       <button class="section-tab" type="button" data-target="evaluation">Feedback</button>
     </nav>
+    <div id="accountNotice" class="account-notice" role="status" hidden>
+      <p id="accountNoticeText"></p>
+      <form id="accountSetupForm" class="account-setup-form" hidden>
+        <label for="accountStudentNumber">Your 8-digit student number</label>
+        <div class="account-setup-fields">
+          <input id="accountStudentNumber" inputmode="numeric" autocomplete="off" pattern="[0-9]{8}" maxlength="8" required>
+          <button class="outline-button" type="submit">Link number</button>
+        </div>
+        <p id="accountSetupMessage" role="status" aria-live="polite"></p>
+      </form>
+    </div>
 
     <section class="dashboard-section active" id="map">
       <div class="section-heading"><div><span class="eyebrow">GET ORIENTED</span><h2>Map &amp; directions</h2><p>Allow location access to see your position and nearby mapped rooms.</p></div></div>
@@ -35,23 +46,24 @@
         <button id="locateMe" class="primary-button location-button" type="button">Use my location <span aria-hidden="true">→</span></button>
       </div>
       <div id="locationSummary" class="location-summary" hidden></div>
-      <div class="section-heading subheading"><div><h3>Explore campus in 3D</h3><p>A schematic view generated from campus room records. Add accurate coordinates for a more realistic layout.</p></div></div>
       <div class="campus-map-tools">
         <label for="mapDestination">Find a room</label>
         <select id="mapDestination">
           <option value="">Choose a room or location</option>
         </select>
         <div class="campus-map-actions">
-          <button id="cameraToggle" class="map-control map-reset" type="button" aria-controls="cameraView">Use camera</button>
-          <button id="mapZoomIn" class="map-control" type="button" aria-label="Zoom in">+</button>
-          <button id="mapZoomOut" class="map-control" type="button" aria-label="Zoom out">−</button>
-          <button id="mapReset" class="map-control map-reset" type="button">Reset view</button>
+          <button id="cameraToggle" class="map-control" type="button" aria-controls="cameraView">Use camera</button>
         </div>
       </div>
+      <aside id="mapPlaceDetails" class="map-place-details" aria-live="polite">
+        <span class="card-kicker">CAMPUS DIRECTORY</span>
+        <h3>Choose a destination</h3>
+        <p>Select a room above to view its details and available directions.</p>
+      </aside>
       <div id="cameraView" class="camera-view" hidden>
         <video id="cameraVideo" autoplay playsinline muted aria-label="Live camera preview"></video>
         <div class="camera-overlay">
-          <p id="recognitionStatus" class="recognition-status" role="status" aria-live="polite">Point the camera at the room sign to check for Computer Laboratory or Clinic.</p>
+          <p id="recognitionStatus" class="recognition-status" role="status" aria-live="polite">Choose a destination and point the camera at its room number.</p>
           <div class="camera-crosshair" aria-hidden="true"></div>
           <div id="cameraMarker" class="camera-marker" hidden>
             <span class="camera-marker-arrow" aria-hidden="true">▲</span>
@@ -59,20 +71,10 @@
           </div>
           <p id="cameraStatus" class="camera-status" role="status" aria-live="polite">Camera frames are checked on this device only; they are not recorded or uploaded.</p>
         </div>
+        <button id="confirmArrival" class="camera-arrival-button" type="button" hidden>Confirm arrival</button>
       </div>
-      <div class="campus-map-layout">
-        <div id="campusMap" class="campus-map" role="region" aria-label="Interactive schematic 3D campus map" tabindex="0">
-          <p class="campus-map-message" role="status">Loading 3D campus map…</p>
-        </div>
-        <aside id="mapPlaceDetails" class="map-place-details" aria-live="polite">
-          <span class="card-kicker">CAMPUS DIRECTORY</span>
-          <h3>Select a building</h3>
-          <p>Choose a room from the list or select a building in the 3D view to see its details.</p>
-        </aside>
-      </div>
-      <p class="campus-map-note">Buildings are illustrative, not architectural models. Drag to rotate, scroll to zoom, and select a building to explore. Any line from your location is a visual guide, not an indoor walking route; use Get directions for navigation.</p>
       <div class="section-heading subheading"><div><h3>Mapped rooms</h3><p>Open directions in Google Maps when a room has coordinates.</p></div></div>
-      <div id="mapList" class="cards"><p class="empty-state">Loading campus map…</p></div>
+      <div id="mapList" class="cards"><p class="empty-state">Loading mapped rooms…</p></div>
     </section>
 
     <section class="dashboard-section" id="faculties">
@@ -88,7 +90,7 @@
       <div id="qrCodeList" class="cards"><p class="empty-state">Loading QR guides…</p></div>
     </section>
     <section class="dashboard-section" id="evaluation">
-      <div class="section-heading"><div><span class="eyebrow">HELP US IMPROVE</span><h2>Student feedback</h2><p>Your suggestions help make campus navigation better for everyone.</p></div></div>
+      <div class="section-heading"><div><span class="eyebrow">HELP US IMPROVE</span><h2>Student feedback</h2><p id="feedbackPrompt" hidden>Thanks for using campus directions. How was your map experience?</p><p>Your suggestions help make campus navigation better for everyone.</p></div></div>
       <form id="feedbackForm" class="feedback-card">
         <label for="rating">How would you rate Campus Wayfinder?</label>
         <select id="rating" name="rating" required>
@@ -102,9 +104,6 @@
     </section>
     <footer class="app-footer">Campus Wayfinder <span>·</span> Built to help you find your way.</footer>
   </main>
-  <script type="importmap">
-    {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"}}
-  </script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script type="module" src="dashboard.js"></script>
 </body>

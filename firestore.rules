@@ -3,35 +3,72 @@ service cloud.firestore {
   match /databases/{database}/documents {
     // A signed-in user may read their own profile.
     match /users/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
+      allow get: if request.auth != null
+        && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
       allow create: if request.auth != null
         && request.auth.uid == userId
-        && request.resource.data.keys().hasOnly(['email', 'role', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['email', 'role', 'studentNumber', 'createdAt'])
+        && request.resource.data.keys().hasAll(['email', 'role', 'studentNumber', 'createdAt'])
         && request.resource.data.role == 'student'
+        && request.resource.data.studentNumber is string
+        && request.resource.data.studentNumber.matches('^[0-9]{8}$')
         && request.resource.data.email == request.auth.token.email
+        && isSignedInUser()
         && request.resource.data.createdAt == request.time;
       // A user cannot change their role or remove their profile from the website.
-      allow update, delete: if false;
+      allow update: if request.auth != null
+        && request.auth.uid == userId
+        && resource.data.role == 'student'
+        && isSignedInUser()
+        && !resource.data.keys().hasAny(['studentNumber'])
+        && request.resource.data.keys().hasOnly(['email', 'role', 'createdAt', 'studentNumber'])
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.studentNumber is string
+        && request.resource.data.studentNumber.matches('^[0-9]{8}$');
+      allow delete: if false;
+    }
+
+    // Reserve student numbers without exposing their owner or email to students.
+    match /studentNumbers/{studentNumber} {
+      allow create: if request.auth != null
+        && studentNumber.matches('^[0-9]{8}$')
+        && !exists(/databases/$(database)/documents/studentNumbers/$(studentNumber))
+        && isSignedInUser()
+        && request.resource.data.keys().hasOnly(['userId', 'createdAt'])
+        && request.resource.data.userId is string
+        && request.resource.data.userId == request.auth.uid
+        && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.studentNumber == studentNumber;
+      allow read, delete: if false;
+      allow update: if isSignedInUser()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasOnly(['userId', 'createdAt'])
+        && request.resource.data.userId == resource.data.userId
+        && (!resource.data.keys().hasAny(['createdAt'])
+          || request.resource.data.createdAt == resource.data.createdAt);
     }
 
     // Anyone signed in can view campus information.
     match /faculties/{facultyId} {
-      allow read: if request.auth != null;
+      allow read: if canReadCampus();
       allow create, update, delete: if isAdmin();
     }
 
     match /rooms/{roomId} {
-      allow read: if request.auth != null;
+      allow read: if canReadCampus();
       allow create, update, delete: if isAdmin();
     }
 
     match /qrCodes/{qrCodeId} {
-      allow read: if request.auth != null;
+      allow read: if canReadCampus();
       allow create, update, delete: if isAdmin();
     }
 
     match /feedback/{feedbackId} {
       allow create: if request.auth != null
+        && isSignedInUser()
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.keys().hasOnly(['rating', 'comment', 'userId', 'createdAt'])
         && request.resource.data.rating is int
@@ -44,10 +81,38 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    match /transactions/{transactionId} {
+      allow create: if request.auth != null
+        && isSignedInUser()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'student'
+        && request.resource.data.keys().hasOnly(['userId', 'studentNumber', 'roomId', 'roomNumber', 'building', 'method', 'createdAt'])
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.studentNumber == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.studentNumber
+        && request.resource.data.roomId is string
+        && request.resource.data.roomNumber is string
+        && request.resource.data.building is string
+        && request.resource.data.method in ['camera', 'directions']
+        && request.resource.data.createdAt == request.time
+        && exists(/databases/$(database)/documents/rooms/$(request.resource.data.roomId))
+        && (request.resource.data.method != 'camera'
+          || request.resource.data.roomNumber == get(/databases/$(database)/documents/rooms/$(request.resource.data.roomId)).data.roomNumber);
+      allow read: if isAdmin();
+      allow update, delete: if false;
+    }
+
     function isAdmin() {
       return request.auth != null
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'superadmin'];
+    }
+
+    function canReadCampus() {
+      return isAdmin() || isSignedInUser();
+    }
+
+    function isSignedInUser() {
+      return request.auth != null;
     }
   }
 }
