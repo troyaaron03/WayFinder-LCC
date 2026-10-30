@@ -1,4 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+import { defaultRoomCoordinates } from "./campus-locations.js";
 
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
 
@@ -228,6 +229,7 @@ function faculty(data = {}, id = null) {
 }
 
 function room(data = {}, id = null) {
+  let defaultCoordinates = defaultRoomCoordinates(data);
   title.textContent = id ? "Edit Room" : "Add Room";
   form.innerHTML = `
     <label>Room Number *</label>
@@ -238,11 +240,11 @@ function room(data = {}, id = null) {
     <input id="floor" value="${esc(data.floor)}">
     <label>Latitude (optional)</label>
     <input id="latitude" type="number" step="any" min="-90" max="90"
-      value="${esc(data.latitude ?? "")}" placeholder="e.g. 14.5995">
+      value="${esc(data.latitude ?? defaultCoordinates?.latitude ?? "")}" placeholder="e.g. 14.5995">
     <label>Longitude (optional)</label>
     <input id="longitude" type="number" step="any" min="-180" max="180"
-      value="${esc(data.longitude ?? "")}" placeholder="e.g. 120.9842">
-    <small class="hint">Add both coordinates to enable GPS distance, Google Maps directions, and geographic placement in the student 3D campus view. Coordinates are for the room or building entrance.</small>
+      value="${esc(data.longitude ?? defaultCoordinates?.longitude ?? "")}" placeholder="e.g. 120.9842">
+    <small class="hint">Add both coordinates to enable GPS distance, Google Maps directions, and geographic placement in the student 3D campus view. The Computer Lab default is 14.803056, 121.069722; verify its pin is at the correct entrance.</small>
     <label>Room Type</label>
     <input id="roomType" placeholder="Classroom, Laboratory, Office, etc." value="${esc(data.roomType)}">
     <label>Description</label>
@@ -259,6 +261,25 @@ function room(data = {}, id = null) {
     <input id="mapLink" placeholder="Google Maps, campus map page, etc." value="${esc(data.mapLink)}">
     <button class="save" id="saveRoom" type="submit">Save Room</button>
   `;
+  ["roomNumber", "building", "roomType"].forEach((fieldId) => {
+    $(fieldId).addEventListener("input", () => {
+      const latitude = $("latitude");
+      const longitude = $("longitude");
+      const fieldsAreBlank = !latitude.value.trim() && !longitude.value.trim();
+      const fieldsContainPreviousDefault = defaultCoordinates &&
+        Number(latitude.value) === defaultCoordinates.latitude &&
+        Number(longitude.value) === defaultCoordinates.longitude;
+      if (!fieldsAreBlank && !fieldsContainPreviousDefault) return;
+
+      defaultCoordinates = defaultRoomCoordinates({
+        roomNumber: val("roomNumber"),
+        building: val("building"),
+        roomType: val("roomType")
+      });
+      latitude.value = defaultCoordinates ? String(defaultCoordinates.latitude) : "";
+      longitude.value = defaultCoordinates ? String(defaultCoordinates.longitude) : "";
+    });
+  });
   showImagePreview("mapFile", "mapPreview");
 
   form.onsubmit = async (event) => {

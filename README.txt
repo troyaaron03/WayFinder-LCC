@@ -30,6 +30,9 @@ Google Maps route. GPS requires the user's permission and a secure context (HTTP
 or localhost). A student's location is held in page memory only and is not
 written to Firebase. It is included in a Google Maps link only if the student
 chooses to open directions.
+The Computer Lab entry defaults to 14.803056, 121.069722, converted from the
+coordinates supplied for the campus. Administrators should verify the pin is at
+the correct entrance before relying on directions.
 
 3D CAMPUS VIEW
 The student map includes an interactive schematic 3D view generated from room

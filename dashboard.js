@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
 import { getFirestore, collection, addDoc, getDocs, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+import { defaultRoomCoordinates } from "./campus-locations.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCDuxFyTm3pYIsrO5i5ivTKZyM4SZYnpqM",
@@ -49,9 +50,12 @@ function safeHttpUrl(value) {
 }
 
 function roomCoordinates(room) {
-  if (!room || room.latitude === null || room.latitude === undefined || room.latitude === "" ||
-      room.longitude === null || room.longitude === undefined || room.longitude === "") {
+  if (!room) {
     return null;
+  }
+  if (room.latitude === null || room.latitude === undefined || room.latitude === "" ||
+      room.longitude === null || room.longitude === undefined || room.longitude === "") {
+    return defaultRoomCoordinates(room);
   }
   const lat = Number(room.latitude);
   const lng = Number(room.longitude);
