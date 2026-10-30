@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#103764">
+  <title>Campus Wayfinder — Find your place</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="login-page min-h-screen antialiased">
+  <main class="login-layout">
+    <section class="login-intro">
+      <a class="brand" href="index.html" aria-label="Campus Wayfinder home">
+        <img class="brand-mark" src="assets/campus-logo.jpg" alt="La Concepcion College">
+        <span>Campus<span class="brand-light">Wayfinder</span></span>
+      </a>
+      <div class="intro-copy">
+        <span class="eyebrow">YOUR CAMPUS, MADE CLEAR</span>
+        <h1>Find your next<br><span>destination.</span></h1>
+        <p>Discover campus spaces, get directions, and find your way with a little help from your phone.</p>
+      </div>
+      <div class="intro-note"><span aria-hidden="true">◎</span> Simple, helpful campus navigation</div>
+    </section>
+
+    <section class="login-panel" aria-label="Account access">
+      <div class="login-card">
+        <div class="mobile-brand brand">
+          <img class="brand-mark" src="assets/campus-logo.jpg" alt="La Concepcion College">
+          <span>Campus<span class="brand-light">Wayfinder</span></span>
+        </div>
+        <div class="form-heading">
+          <span class="eyebrow">WELCOME</span>
+          <h2 id="formTitle">Sign in</h2>
+          <p id="formDescription">Use your campus account to continue.</p>
+        </div>
+
+        <form id="loginForm" class="auth-form">
+          <label for="email">Campus email</label>
+          <input id="email" name="email" type="email" autocomplete="username" required placeholder="you@campus.edu">
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" required placeholder="Enter your password">
+          <button class="primary-button" type="submit">Sign in <span aria-hidden="true">→</span></button>
+          <p class="form-switch">New to Campus Wayfinder? <button type="button" id="showRegister">Create an account</button></p>
+        </form>
+
+        <form id="registerForm" class="auth-form" hidden>
+          <label for="registerEmail">Campus email</label>
+          <input id="registerEmail" name="email" type="email" autocomplete="username" required placeholder="you@campus.edu">
+          <label for="registerPassword">Password</label>
+          <input id="registerPassword" name="new-password" type="password" autocomplete="new-password" required minlength="6" placeholder="At least 6 characters">
+          <label for="confirmPassword">Confirm password</label>
+          <input id="confirmPassword" name="confirm-password" type="password" autocomplete="new-password" required minlength="6" placeholder="Enter it again">
+          <button class="primary-button" type="submit">Create student account <span aria-hidden="true">→</span></button>
+          <p class="form-switch">Already have an account? <button type="button" id="showLogin">Sign in</button></p>
+        </form>
+        <p id="msg" role="status" aria-live="polite"></p>
+        <p class="privacy-note">Your location is only used when you choose to request directions.</p>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="login.js"></script>
+</body>
+</html>

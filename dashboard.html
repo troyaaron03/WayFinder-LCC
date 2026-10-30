@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#103764">
+  <title>Campus Wayfinder — Student dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body class="app-page min-h-screen antialiased">
+  <header class="app-header">
+    <a class="brand" href="dashboard.html"><img class="brand-mark" src="assets/campus-logo.jpg" alt="La Concepcion College"><span>Campus<span class="brand-light">Wayfinder</span></span></a>
+    <div class="header-actions"><span id="userEmail" class="user-email"></span><button id="logout" class="outline-button" type="button">Sign out</button></div>
+  </header>
+  <main class="app-main">
+    <section class="welcome-banner">
+      <div><span class="eyebrow">CAMPUS COMPANION</span><h1>Good to see you.</h1><p>Explore campus spaces and find a clear route to where you need to be.</p></div>
+      <div class="welcome-symbol" aria-hidden="true">⌖</div>
+    </section>
+
+    <nav class="section-nav" aria-label="Campus sections">
+      <button class="section-tab active" type="button" data-target="map">Map &amp; directions</button>
+      <button class="section-tab" type="button" data-target="faculties">Faculties</button>
+      <button class="section-tab" type="button" data-target="rooms">Rooms</button>
+      <button class="section-tab" type="button" data-target="qrCodes">QR guides</button>
+      <button class="section-tab" type="button" data-target="evaluation">Feedback</button>
+    </nav>
+
+    <section class="dashboard-section active" id="map">
+      <div class="section-heading"><div><span class="eyebrow">GET ORIENTED</span><h2>Map &amp; directions</h2><p>Allow location access to see your position and nearby mapped rooms.</p></div></div>
+      <div class="location-panel">
+        <div class="location-icon" aria-hidden="true">⌖</div>
+        <div class="location-copy"><h3>Your location</h3><p id="locationMessage" role="status" aria-live="polite">Your location stays on this device and is only requested when you choose.</p></div>
+        <button id="locateMe" class="primary-button location-button" type="button">Use my location <span aria-hidden="true">→</span></button>
+      </div>
+      <div id="locationSummary" class="location-summary" hidden></div>
+      <div class="section-heading subheading"><div><h3>Explore campus in 3D</h3><p>A schematic view generated from campus room records. Add accurate coordinates for a more realistic layout.</p></div></div>
+      <div class="campus-map-tools">
+        <label for="mapDestination">Find a room</label>
+        <select id="mapDestination">
+          <option value="">Choose a room or location</option>
+        </select>
+        <div class="campus-map-actions">
+          <button id="cameraToggle" class="map-control map-reset" type="button" aria-controls="cameraView">Use camera</button>
+          <button id="mapZoomIn" class="map-control" type="button" aria-label="Zoom in">+</button>
+          <button id="mapZoomOut" class="map-control" type="button" aria-label="Zoom out">−</button>
+          <button id="mapReset" class="map-control map-reset" type="button">Reset view</button>
+        </div>
+      </div>
+      <div id="cameraView" class="camera-view" hidden>
+        <video id="cameraVideo" autoplay playsinline muted aria-label="Live camera preview"></video>
+        <div class="camera-overlay">
+          <div class="camera-crosshair" aria-hidden="true"></div>
+          <div id="cameraMarker" class="camera-marker" hidden>
+            <span class="camera-marker-arrow" aria-hidden="true">▲</span>
+            <span id="cameraMarkerLabel"></span>
+          </div>
+          <p id="cameraStatus" class="camera-status" role="status" aria-live="polite">Camera preview is on. Video is not recorded or uploaded.</p>
+        </div>
+      </div>
+      <div class="campus-map-layout">
+        <div id="campusMap" class="campus-map" role="region" aria-label="Interactive schematic 3D campus map" tabindex="0">
+          <p class="campus-map-message" role="status">Loading 3D campus map…</p>
+        </div>
+        <aside id="mapPlaceDetails" class="map-place-details" aria-live="polite">
+          <span class="card-kicker">CAMPUS DIRECTORY</span>
+          <h3>Select a building</h3>
+          <p>Choose a room from the list or select a building in the 3D view to see its details.</p>
+        </aside>
+      </div>
+      <p class="campus-map-note">Buildings are illustrative, not architectural models. Drag to rotate, scroll to zoom, and select a building to explore. Any line from your location is a visual guide, not an indoor walking route; use Get directions for navigation.</p>
+      <div class="section-heading subheading"><div><h3>Mapped rooms</h3><p>Open directions in Google Maps when a room has coordinates.</p></div></div>
+      <div id="mapList" class="cards"><p class="empty-state">Loading campus map…</p></div>
+    </section>
+
+    <section class="dashboard-section" id="faculties">
+      <div class="section-heading"><div><span class="eyebrow">PEOPLE &amp; PLACES</span><h2>Faculties</h2><p>Find faculty offices, contact details, and opening hours.</p></div></div>
+      <div id="facultyList" class="cards"><p class="empty-state">Loading faculties…</p></div>
+    </section>
+    <section class="dashboard-section" id="rooms">
+      <div class="section-heading"><div><span class="eyebrow">CAMPUS DIRECTORY</span><h2>Rooms</h2><p>Browse room details and available floor plan links.</p></div></div>
+      <div id="roomList" class="cards"><p class="empty-state">Loading rooms…</p></div>
+    </section>
+    <section class="dashboard-section" id="qrCodes">
+      <div class="section-heading"><div><span class="eyebrow">SCAN &amp; GO</span><h2>QR guides</h2><p>Scan a code to open its destination, or open the link directly.</p></div></div>
+      <div id="qrCodeList" class="cards"><p class="empty-state">Loading QR guides…</p></div>
+    </section>
+    <section class="dashboard-section" id="evaluation">
+      <div class="section-heading"><div><span class="eyebrow">HELP US IMPROVE</span><h2>Student feedback</h2><p>Your suggestions help make campus navigation better for everyone.</p></div></div>
+      <form id="feedbackForm" class="feedback-card">
+        <label for="rating">How would you rate Campus Wayfinder?</label>
+        <select id="rating" name="rating" required>
+          <option value="">Choose a rating</option><option value="5">5 — Excellent</option><option value="4">4 — Very good</option><option value="3">3 — Good</option><option value="2">2 — Fair</option><option value="1">1 — Needs improvement</option>
+        </select>
+        <label for="comment">Comments or suggestions <span>(optional)</span></label>
+        <textarea id="comment" name="comment" rows="4" maxlength="1000" placeholder="What worked well? What could be clearer?"></textarea>
+        <button type="submit" id="submitFeedback" class="primary-button">Send feedback <span aria-hidden="true">→</span></button>
+        <p id="feedbackMessage" role="status" aria-live="polite"></p>
+      </form>
+    </section>
+    <footer class="app-footer">Campus Wayfinder <span>·</span> Built to help you find your way.</footer>
+  </main>
+  <script type="importmap">
+    {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"}}
+  </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script type="module" src="dashboard.js"></script>
+</body>
+</html>

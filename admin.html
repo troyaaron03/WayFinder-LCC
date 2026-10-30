@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#103764">
+  <title>Campus Wayfinder — Administration</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body class="admin-page min-h-screen antialiased">
+  <header class="admin-header">
+    <a class="brand" href="admin.html"><img class="brand-mark" src="assets/campus-logo.jpg" alt="La Concepcion College"><span>Campus<span class="brand-light">Wayfinder</span></span></a>
+    <div class="admin-header-right"><span class="admin-label">ADMINISTRATION</span><button id="logout" type="button">Sign out</button></div>
+  </header>
+  <div class="admin-layout">
+    <aside class="admin-sidebar">
+      <span class="sidebar-label">WORKSPACE</span>
+      <nav class="admin-nav" aria-label="Administration sections">
+        <button type="button" data-tab="overview" class="active"><span aria-hidden="true">⌂</span> Overview</button>
+        <span class="sidebar-label sidebar-group-label">CAMPUS CONTENT</span>
+        <button type="button" data-tab="faculties"><span aria-hidden="true">▦</span> Faculties</button>
+        <button type="button" data-tab="rooms"><span aria-hidden="true">⌖</span> Rooms &amp; locations</button>
+        <button type="button" data-tab="qrCodes"><span aria-hidden="true">▧</span> QR guides</button>
+        <span class="sidebar-label sidebar-group-label">COMMUNITY</span>
+        <button type="button" data-tab="feedback"><span aria-hidden="true">✳</span> Student feedback</button>
+      </nav>
+      <div class="sidebar-note"><span class="sidebar-note-icon" aria-hidden="true">✦</span><strong>Keep campus clear.</strong><p>Accurate room details help everyone find their way.</p></div>
+    </aside>
+    <main class="admin-main">
+      <section id="overview" class="active">
+        <div class="overview-welcome"><div><span class="eyebrow">ADMIN OVERVIEW</span><h1>Campus Dashboard</h1><p>Manage campus information and help students find their way.</p></div><span class="overview-compass" aria-hidden="true">⌖</span></div>
+        <div class="stat-grid" aria-label="Campus content summary">
+          <article class="stat-card"><span class="stat-icon faculty-icon" aria-hidden="true">▦</span><div><span class="stat-label">FACULTIES</span><strong id="facultyCount">—</strong><span class="stat-caption">Campus listings</span></div></article>
+          <article class="stat-card"><span class="stat-icon room-icon" aria-hidden="true">⌖</span><div><span class="stat-label">ROOMS</span><strong id="roomCount">—</strong><span class="stat-caption">Campus locations</span></div></article>
+          <article class="stat-card"><span class="stat-icon qr-icon" aria-hidden="true">▧</span><div><span class="stat-label">QR GUIDES</span><strong id="qrCount">—</strong><span class="stat-caption">Scannable resources</span></div></article>
+          <article class="stat-card"><span class="stat-icon feedback-icon" aria-hidden="true">✳</span><div><span class="stat-label">FEEDBACK</span><strong id="feedbackCount">—</strong><span class="stat-caption">Student responses</span></div></article>
+        </div>
+        <div class="overview-section-heading"><div><span class="eyebrow">QUICK ACTIONS</span><h2>What would you like to update?</h2></div></div>
+        <div class="quick-grid">
+          <button class="quick-card" type="button" data-quick-action="addFaculty"><span class="quick-icon">＋</span><span><strong>Add a faculty</strong><small>Share office and contact details</small></span><span class="quick-arrow">→</span></button>
+          <button class="quick-card" type="button" data-quick-action="addRoom"><span class="quick-icon">＋</span><span><strong>Add a room</strong><small>Include coordinates for directions</small></span><span class="quick-arrow">→</span></button>
+          <button class="quick-card" type="button" data-quick-action="addQrCode"><span class="quick-icon">＋</span><span><strong>Create a QR guide</strong><small>Link to a map or campus resource</small></span><span class="quick-arrow">→</span></button>
+        </div>
+      </section>
+      <section id="faculties">
+        <div class="head"><div><span class="eyebrow">CAMPUS DIRECTORY</span><h1>Faculties</h1><p>Manage campus departments and office information.</p></div><button id="addFaculty" type="button">+ Add faculty</button></div>
+        <div id="facultyList" class="cards"></div>
+      </section>
+      <section id="rooms">
+        <div class="head"><div><span class="eyebrow">CAMPUS DIRECTORY</span><h1>Rooms &amp; locations</h1><p>Add room details and coordinates to enable GPS directions.</p></div><button id="addRoom" type="button">+ Add room</button></div>
+        <div id="roomList" class="cards"></div>
+      </section>
+      <section id="qrCodes">
+        <div class="head"><div><span class="eyebrow">SCAN &amp; GO</span><h1>QR guides</h1><p>Create scannable codes for campus maps, room guides, and resources.</p></div><button id="addQrCode" type="button">+ Create QR guide</button></div>
+        <div id="qrCodeList" class="cards"></div>
+      </section>
+      <section id="feedback">
+        <div class="head"><div><span class="eyebrow">STUDENT VOICE</span><h1>Student feedback</h1><p>Review ratings and suggestions shared by students.</p></div><button id="refreshFeedback" class="secondary-button" type="button">Refresh feedback</button></div>
+        <div id="feedbackList" class="cards"><p class="empty-state">Student feedback will appear here.</p></div>
+      </section>
+    </main>
+  </div>
+  <div id="modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="title">
+    <div class="box"><button id="close" class="x" type="button" aria-label="Close dialog">×</button><span class="eyebrow">CAMPUS WAYFINDER</span><h2 id="title"></h2><form id="form"></form></div>
+  </div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script type="module" src="admin.js"></script>
+</body>
+</html>
