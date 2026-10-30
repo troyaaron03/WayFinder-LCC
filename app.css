@@ -42,6 +42,7 @@ button{cursor:pointer}
 .camera-view{position:relative;min-height:250px;overflow:hidden;margin:0 0 14px;border:1px solid #233c47;border-radius:15px;background:#18272e}
 .camera-view video{display:block;width:100%;max-height:520px;min-height:250px;object-fit:cover}
 .camera-overlay{position:absolute;inset:0;pointer-events:none}
+.recognition-status{position:absolute;top:10px;right:10px;left:10px;margin:0;padding:9px 12px;border:1px solid #ffffff3b;border-radius:8px;background:#102f56dc;color:white;text-align:center;font-size:12px;font-weight:650;line-height:1.5}
 .camera-crosshair{position:absolute;top:50%;left:50%;width:2px;height:30px;background:#fff9;transform:translate(-50%,-50%);box-shadow:0 0 6px #0008}
 .camera-crosshair:after{position:absolute;top:14px;left:-14px;width:30px;height:2px;background:#fff9;content:"";box-shadow:0 0 6px #0008}
 .camera-marker{position:absolute;top:18%;left:50%;display:grid;justify-items:center;gap:4px;max-width:70%;color:#fff;text-align:center;text-shadow:0 2px 6px #000;transform:translateX(-50%)}

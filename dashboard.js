@@ -27,6 +27,11 @@ let mapResizeObserver = null;
 let cameraStream = null;
 let cameraHeading = null;
 let cameraOrientationEnabled = false;
+let recognitionWorker = null;
+let recognitionInterval = null;
+let recognitionBusy = false;
+let recognitionSession = 0;
+let tesseractScriptPromise = null;
 
 function esc(value = "") {
   return String(value).replace(/[&<>"']/g, (char) => ({
@@ -678,11 +683,122 @@ function stopCameraView(message = "") {
   cameraOrientationEnabled = false;
   window.removeEventListener("deviceorientation", handleDeviceOrientation, true);
   if (stream) stream.getTracks().forEach((track) => track.stop());
+  stopSignRecognition(message || "Camera sign check stopped.");
   $("cameraVideo").srcObject = null;
   $("cameraView").hidden = true;
   $("cameraToggle").textContent = "Use camera";
   $("cameraMarker").hidden = true;
   if (message) $("cameraStatus").textContent = message;
+}
+
+function loadTesseractScript() {
+  if (window.Tesseract) return Promise.resolve(window.Tesseract);
+  if (tesseractScriptPromise) return tesseractScriptPromise;
+  tesseractScriptPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+    script.async = true;
+    script.onload = () => {
+      if (window.Tesseract) resolve(window.Tesseract);
+      else reject(new Error("The OCR library did not initialize."));
+    };
+    script.onerror = () => reject(new Error("The OCR library could not be downloaded."));
+    document.head.appendChild(script);
+  }).catch((error) => {
+    tesseractScriptPromise = null;
+    throw error;
+  });
+  return tesseractScriptPromise;
+}
+
+function recognizedCampusPlace(text) {
+  const words = text.toLowerCase().replace(/[^a-z0-9]+/g, " ");
+  if (/\bclinic\b/.test(words)) return "Clinic";
+  const hasComputer = /\bcomputer\b/.test(words);
+  const hasLaboratory = /\b(lab|laboratory|laboratories)\b/.test(words) || words.includes("laborat");
+  return hasComputer && hasLaboratory ? "Computer Laboratory" : "";
+}
+
+function selectedPlaceMatches(place) {
+  const selected = String(selectedMapBuilding || "").toLowerCase();
+  if (!selected) return null;
+  if (place === "Clinic") return selected.includes("clinic");
+  return selected.includes("computer") || selected.includes("comlab") || selected.includes("laboratory");
+}
+
+async function recognizeCameraSign(stream, session) {
+  if (!recognitionWorker || recognitionBusy || cameraStream !== stream) return;
+  const video = $("cameraVideo");
+  if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || !video.videoWidth || !video.videoHeight) return;
+  recognitionBusy = true;
+  try {
+    const canvas = document.createElement("canvas");
+    const scale = Math.min(1, 1280 / video.videoWidth);
+    canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+    canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+    canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+    const result = await recognitionWorker.recognize(canvas);
+    if (session !== recognitionSession || cameraStream !== stream) return;
+
+    const place = recognizedCampusPlace(result.data.text || "");
+    if (!place) {
+      $("recognitionStatus").textContent = "No clear Clinic or Computer Laboratory sign found yet. Aim at the sign and move closer.";
+      return;
+    }
+
+    const selectedMatch = selectedPlaceMatches(place);
+    if (selectedMatch === false) {
+      $("recognitionStatus").textContent = `Possible mismatch: the camera reads “${place},” but the map selection is “${selectedMapBuilding}.” Verify the sign.`;
+    } else {
+      $("recognitionStatus").textContent = `Possible match: “${place}” sign detected. Please verify the room before entering.`;
+    }
+  } catch (error) {
+    if (session === recognitionSession && cameraStream === stream) {
+      console.error("Could not recognize the room sign:", error);
+      $("recognitionStatus").textContent = "Could not read the camera frame. Check permission and try aiming at the sign again.";
+    }
+  } finally {
+    if (session === recognitionSession) recognitionBusy = false;
+  }
+}
+
+async function startSignRecognition(stream) {
+  const session = ++recognitionSession;
+  const status = $("recognitionStatus");
+  status.textContent = "Loading on-device text recognition… Frames are not uploaded or saved.";
+  try {
+    const tesseract = await loadTesseractScript();
+    if (cameraStream !== stream || session !== recognitionSession) return;
+    const worker = await tesseract.createWorker("eng");
+    if (cameraStream !== stream || session !== recognitionSession) {
+      await worker.terminate();
+      return;
+    }
+    recognitionWorker = worker;
+    status.textContent = "Point the camera at the Clinic or Computer Laboratory sign.";
+    recognitionInterval = window.setInterval(() => recognizeCameraSign(stream, session), 1800);
+    await recognizeCameraSign(stream, session);
+  } catch (error) {
+    if (session === recognitionSession && cameraStream === stream) {
+      console.error("Could not start on-device sign recognition:", error);
+      status.textContent = "Sign recognition could not load. Check your internet connection; the camera preview is still available.";
+    }
+  }
+}
+
+function stopSignRecognition(message = "") {
+  recognitionSession += 1;
+  if (recognitionInterval !== null) {
+    window.clearInterval(recognitionInterval);
+    recognitionInterval = null;
+  }
+  const worker = recognitionWorker;
+  recognitionWorker = null;
+  recognitionBusy = false;
+  if (worker) {
+    worker.terminate().catch((error) => console.error("Could not stop sign recognition cleanly:", error));
+  }
+  if (message && $("recognitionStatus")) $("recognitionStatus").textContent = message;
 }
 
 async function startCameraView() {
@@ -703,6 +819,7 @@ async function startCameraView() {
   button.textContent = "Requesting permission…";
   $("cameraView").hidden = false;
   status.textContent = "Waiting for camera and compass permission. Camera video is not recorded or uploaded.";
+  $("recognitionStatus").textContent = "Waiting for camera permission…";
   cameraHeading = null;
   cameraOrientationEnabled = await requestCameraOrientationPermission();
   try {
@@ -724,10 +841,12 @@ async function startCameraView() {
       }, { once: true });
     });
     updateCameraGuidance();
+    startSignRecognition(stream);
   } catch (error) {
     console.error("Could not start camera view:", error);
     stopCameraView();
     $("cameraView").hidden = false;
+    $("recognitionStatus").textContent = "Room sign checking is unavailable until camera permission is granted.";
     if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
       status.textContent = "Camera permission was denied. Allow camera access in your browser settings, or continue using the map.";
     } else if (error.name === "NotFoundError" || error.name === "DevicesNotFoundError") {

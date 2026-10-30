@@ -51,12 +51,13 @@
       <div id="cameraView" class="camera-view" hidden>
         <video id="cameraVideo" autoplay playsinline muted aria-label="Live camera preview"></video>
         <div class="camera-overlay">
+          <p id="recognitionStatus" class="recognition-status" role="status" aria-live="polite">Point the camera at the room sign to check for Computer Laboratory or Clinic.</p>
           <div class="camera-crosshair" aria-hidden="true"></div>
           <div id="cameraMarker" class="camera-marker" hidden>
             <span class="camera-marker-arrow" aria-hidden="true">▲</span>
             <span id="cameraMarkerLabel"></span>
           </div>
-          <p id="cameraStatus" class="camera-status" role="status" aria-live="polite">Camera preview is on. Video is not recorded or uploaded.</p>
+          <p id="cameraStatus" class="camera-status" role="status" aria-live="polite">Camera frames are checked on this device only; they are not recorded or uploaded.</p>
         </div>
       </div>
       <div class="campus-map-layout">

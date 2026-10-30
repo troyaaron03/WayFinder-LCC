@@ -42,13 +42,15 @@ coordinates and custom 3D models or floor plans.
 
 CAMERA GUIDANCE
 Students may opt in to a live camera view from the map page. The browser asks
-for camera permission only after the student chooses Use camera; compatible
-devices may also ask for compass/orientation permission. Camera video is shown
-locally and is not recorded or uploaded. Camera access requires HTTPS or
-localhost. The destination indicator is approximate and depends on device
-location, compass support, and accurate room coordinates; it is not a
-camera-anchored AR route. Students can still use the map without granting
-camera or location access.
+for camera permission only after the student chooses Use camera. The browser
+uses on-device OCR to look for "Computer Laboratory" and "Clinic" in the live
+view. Frames are processed in the browser and are not recorded or uploaded.
+OCR and camera access need an internet connection to load the library and
+HTTPS or localhost for camera access. The sign check is only a possible match,
+not proof that the student is at the correct room; point the camera at a
+readable room sign and verify it in person. Students can still use the map
+without granting camera or location access. Compatible devices may also ask
+for compass/orientation permission for the approximate destination indicator.
 
 QR GUIDES
 Administrators add a guide name and an HTTP/HTTPS destination. The app generates
